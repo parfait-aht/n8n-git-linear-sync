@@ -1,0 +1,493 @@
+{
+  "name": "git → Linear",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "git-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-git-sync",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        300
+      ],
+      "webhookId": "git-sync-demo"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// La charge utile arrive sous .body quand le webhook recoit du JSON en POST.\nconst body = $input.first().json.body ?? $input.first().json;\n\n// Equipe Linear utilisee quand le depot n'en declare aucune.\nconst DEFAULT_TEAM_KEY = 'ALO';\n\nconst teamKey = String(body.teamKey || DEFAULT_TEAM_KEY).toUpperCase();\nconst commits = Array.isArray(body.commits) ? body.commits : [];\n\n// Un identifiant Linear peut apparaitre dans le nom de branche ou dans un message.\nconst haystack = [body.branch || '', ...commits.map(c => c.subject || '')].join(' ');\nconst match = haystack.match(new RegExp('\\\\b' + teamKey + '-(\\\\d+)\\\\b', 'i'));\n\nconst commitsText = commits\n  .map(c => '- ' + String(c.sha).slice(0, 7) + ' ' + c.subject)\n  .join('\\n');\n\nconst filesText = (body.files || []).slice(0, 40).join('\\n');\n\nreturn [{\n  json: {\n    repo: body.repo || 'inconnu',\n    branch: body.branch || 'inconnue',\n    author: body.author || 'inconnu',\n    stat: body.stat || '',\n    teamKey,\n    hasRef: Boolean(match),\n    issueNumber: match ? Number(match[1]) : null,\n    issueIdentifier: match ? teamKey + '-' + match[1] : null,\n    commits,\n    commitsText,\n    filesText,\n  },\n}];"
+      },
+      "id": "analyser-le-contexte",
+      "name": "Analyser le contexte",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Référence trouvée ?-cond",
+              "leftValue": "={{ $json.hasRef }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "référence-trouvée-",
+      "name": "Référence trouvée ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'query($number: Float!, $teamKey: String!) { issues(filter: { number: { eq: $number }, team: { key: { eq: $teamKey } } }, first: 1) { nodes { id identifier title url state { id name } } } }',\n  variables: { number: $json.issueNumber, teamKey: $json.teamKey }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--ticket-par-référence",
+      "name": "Linear · Ticket par référence",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'query($teamKey: String!) { teams(filter: { key: { eq: $teamKey } }, first: 1) { nodes { id key name } } issues(filter: { team: { key: { eq: $teamKey } }, state: { type: { nin: [\"completed\", \"canceled\"] } } }, first: 50) { nodes { id identifier title description url } } }',\n  variables: { teamKey: $json.teamKey }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--contexte-équipe",
+      "name": "Linear · Contexte équipe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ctx = $('Analyser le contexte').first().json;\nconst data = $input.first().json.data || {};\nconst issues = (data.issues && data.issues.nodes) || [];\nconst team = (data.teams && data.teams.nodes && data.teams.nodes[0]) || null;\n\nconst catalogue = issues.map(i => '- ' + i.identifier + ' : ' + i.title).join('\\n')\n  || '(aucun ticket ouvert)';\n\nconst prompt = [\n  'Tu relies un lot de commits git a un ticket Linear.',\n  '',\n  'Depot : ' + ctx.repo,\n  'Branche : ' + ctx.branch,\n  '',\n  'Commits :',\n  ctx.commitsText,\n  '',\n  'Fichiers modifies :',\n  ctx.filesText,\n  '',\n  \"Tickets ouverts de l'equipe \" + ctx.teamKey + ' :',\n  catalogue,\n  '',\n  'Mets dans match_identifier l identifiant du ticket qui correspond vraiment a ce',\n  'travail, ou null si aucun ne correspond. confidence exprime ta certitude entre 0 et 1 :',\n  'reste sous 0.7 des qu un doute serieux existe.',\n  'Quand aucun ticket ne correspond, propose dans suggested_title et',\n  'suggested_description le ticket a creer : titre court en francais, description en',\n  'markdown resumant l intention du travail.',\n].join('\\n');\n\n// Le schema force la reponse a etre du JSON exploitable, jamais de la prose.\nconst schema = {\n  type: 'object',\n  properties: {\n    match_identifier: { type: ['string', 'null'] },\n    confidence: { type: 'number' },\n    reason: { type: 'string' },\n    suggested_title: { type: 'string' },\n    suggested_description: { type: 'string' },\n  },\n  required: ['match_identifier', 'confidence', 'reason', 'suggested_title', 'suggested_description'],\n  additionalProperties: false,\n};\n\nreturn [{\n  json: {\n    teamId: team ? team.id : null,\n    issues,\n    anthropicBody: {\n      model: 'claude-opus-5',\n      max_tokens: 2000,\n      output_config: { effort: 'low', format: { type: 'json_schema', schema } },\n      messages: [{ role: 'user', content: prompt }],\n    },\n  },\n}];"
+      },
+      "id": "préparer-lappel-ia",
+      "name": "Préparer l'appel IA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        540,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.anthropicBody) }}",
+        "options": {}
+      },
+      "id": "claude-rapprochement",
+      "name": "Claude · Rapprochement",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const prep = $(\"Préparer l'appel IA\").first().json;\nconst response = $input.first().json;\n\nconst text = (response.content || [])\n  .filter(b => b.type === 'text')\n  .map(b => b.text)\n  .join('');\n\nlet verdict;\ntry {\n  verdict = JSON.parse(text);\n} catch (error) {\n  throw new Error('Reponse IA illisible : ' + text.slice(0, 300));\n}\n\n// En dessous de ce seuil, on ne touche a aucun ticket existant.\nconst SEUIL = 0.7;\n\nconst issue = verdict.match_identifier\n  ? prep.issues.find(i => i.identifier === verdict.match_identifier) || null\n  : null;\n\nreturn [{\n  json: {\n    sure: Boolean(issue) && verdict.confidence >= SEUIL,\n    confidence: verdict.confidence,\n    reason: verdict.reason,\n    issue,\n    teamId: prep.teamId,\n    suggestedTitle: verdict.suggested_title,\n    suggestedDescription: verdict.suggested_description,\n  },\n}];"
+      },
+      "id": "décider",
+      "name": "Décider",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Correspondance sûre ?-cond",
+              "leftValue": "={{ $json.sure }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "correspondance-sûre-",
+      "name": "Correspondance sûre ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation($teamId: String!, $title: String!, $description: String!) { issueCreate(input: { teamId: $teamId, title: $title, description: $description }) { success issue { id identifier title url } } }',\n  variables: { teamId: $json.teamId, title: $json.suggestedTitle, description: $json.suggestedDescription }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--créer-le-ticket",
+      "name": "Linear · Créer le ticket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1420,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ctx = $('Analyser le contexte').first().json;\nconst input = $input.first().json;\n\nlet issue = null;\nlet created = false;\nlet confidence = null;\nlet reason = '';\n\nif (input.data && input.data.issues && input.data.issues.nodes.length) {\n  issue = input.data.issues.nodes[0];           // trouve par reference explicite\n} else if (input.data && input.data.issueCreate) {\n  issue = input.data.issueCreate.issue;         // cree a l instant\n  created = true;\n  const decision = $('Décider').first().json;\n  confidence = decision.confidence;\n  reason = decision.reason;\n} else if (input.issue) {\n  issue = input.issue;                          // rapproche par l IA\n  confidence = input.confidence;\n  reason = input.reason;\n}\n\nif (!issue) {\n  throw new Error('Aucun ticket resolu pour la branche ' + ctx.branch);\n}\n\nconst commentBody = [\n  '**Synchronisation depuis `' + ctx.repo + '` — branche `' + ctx.branch + '`**',\n  '',\n  ctx.commitsText,\n  '',\n  ctx.stat ? '`' + ctx.stat.trim() + '`' : '',\n  confidence !== null\n    ? '_Rapprochement automatique, confiance ' + confidence + ' — ' + reason + '_'\n    : '',\n].filter(Boolean).join('\\n');\n\nconst message = (created ? 'Nouveau ticket ' : 'Ticket ') + issue.identifier\n  + ' -> In Progress (' + ctx.commits.length + ' commit(s))\\n' + issue.url;\n\nreturn [{\n  json: {\n    issueId: issue.id,\n    identifier: issue.identifier,\n    title: issue.title,\n    url: issue.url,\n    teamKey: ctx.teamKey,\n    created,\n    commentBody,\n    message,\n  },\n}];"
+      },
+      "id": "normaliser-le-ticket",
+      "name": "Normaliser le ticket",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'query($teamKey: String!) { workflowStates(filter: { team: { key: { eq: $teamKey } }, type: { eq: \"started\" } }, first: 1) { nodes { id name } } }',\n  variables: { teamKey: $json.teamKey }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--état-in-progress",
+      "name": "Linear · État In Progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation($id: String!, $stateId: String!) { issueUpdate(id: $id, input: { stateId: $stateId }) { success issue { identifier url state { name } } } }',\n  variables: {\n    id: $('Normaliser le ticket').first().json.issueId,\n    stateId: $json.data.workflowStates.nodes[0].id\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--passer-en-in-progress",
+      "name": "Linear · Passer en In Progress",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }',\n  variables: {\n    issueId: $('Normaliser le ticket').first().json.issueId,\n    body: $('Normaliser le ticket').first().json.commentBody\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "linear--ajouter-le-commentaire",
+      "name": "Linear · Ajouter le commentaire",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ message: $('Normaliser le ticket').first().json.message }) }}",
+        "options": {}
+      },
+      "id": "reponse",
+      "name": "Réponse",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2540,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Analyser le contexte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyser le contexte": {
+      "main": [
+        [
+          {
+            "node": "Référence trouvée ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Référence trouvée ?": {
+      "main": [
+        [
+          {
+            "node": "Linear · Ticket par référence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Linear · Contexte équipe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Ticket par référence": {
+      "main": [
+        [
+          {
+            "node": "Normaliser le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Contexte équipe": {
+      "main": [
+        [
+          {
+            "node": "Préparer l'appel IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer l'appel IA": {
+      "main": [
+        [
+          {
+            "node": "Claude · Rapprochement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude · Rapprochement": {
+      "main": [
+        [
+          {
+            "node": "Décider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décider": {
+      "main": [
+        [
+          {
+            "node": "Correspondance sûre ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Correspondance sûre ?": {
+      "main": [
+        [
+          {
+            "node": "Normaliser le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Linear · Créer le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Créer le ticket": {
+      "main": [
+        [
+          {
+            "node": "Normaliser le ticket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliser le ticket": {
+      "main": [
+        [
+          {
+            "node": "Linear · État In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · État In Progress": {
+      "main": [
+        [
+          {
+            "node": "Linear · Passer en In Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Passer en In Progress": {
+      "main": [
+        [
+          {
+            "node": "Linear · Ajouter le commentaire",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Ajouter le commentaire": {
+      "main": [
+        [
+          {
+            "node": "Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+#
+# git-sync — envoie les commits recents a n8n, qui met a jour le ticket Linear.
+#
+# Usage :
+#   git-sync                 synchronise les commits non encore envoyes
+#   git-sync --dry-run       affiche la charge utile sans appeler n8n
+#   git-sync --all           ignore le marqueur de derniere synchro
+#   git-sync --team ALO      force la cle d'equipe Linear
+#
+# Configuration (variables d'environnement) :
+#   N8N_WEBHOOK_URL   defaut http://localhost:5678/webhook/git-sync
+#   LINEAR_TEAM_KEY   cle d'equipe Linear par defaut, ex. ALO
+
+set -euo pipefail
+
+WEBHOOK_URL="${N8N_WEBHOOK_URL:-http://localhost:5678/webhook/git-sync}"
+TEAM_KEY="${LINEAR_TEAM_KEY:-}"
+DRY_RUN=0
+IGNORE_STATE=0
+FALLBACK_COUNT=3
+
+red()  { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+dim()  { printf '\033[2m%s\033[0m\n' "$*"; }
+die()  { red "x $*"; exit 1; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1; shift ;;
+    --all)     IGNORE_STATE=1; shift ;;
+    --team)    TEAM_KEY="${2:-}"; shift 2 ;;
+    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)         die "Option inconnue : $1" ;;
+  esac
+done
+
+for tool in git jq curl; do
+  command -v "$tool" >/dev/null || die "$tool est introuvable. Installe-le : brew install $tool"
+done
+
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "Ce dossier n'est pas un depot git."
+
+GIT_DIR="$(git rev-parse --git-dir)"
+ROOT="$(git rev-parse --show-toplevel)"
+STATE_FILE="$GIT_DIR/n8n-last-sync"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+REMOTE="$(git config --get remote.origin.url 2>/dev/null || true)"
+AUTHOR="$(git config user.name 2>/dev/null || echo inconnu)"
+
+if [ -n "$REMOTE" ]; then
+  REPO="$(basename "${REMOTE%.git}")"
+else
+  REPO="$(basename "$ROOT")"
+fi
+
+# La cle d'equipe peut aussi vivre dans un fichier .n8nsync a la racine du depot.
+if [ -z "$TEAM_KEY" ] && [ -f "$ROOT/.n8nsync" ]; then
+  TEAM_KEY="$(tr -d '[:space:]' < "$ROOT/.n8nsync")"
+fi
+
+# --- Determination de la plage de commits a envoyer ------------------------
+LAST_SHA=""
+if [ "$IGNORE_STATE" -eq 0 ] && [ -f "$STATE_FILE" ]; then
+  LAST_SHA="$(tr -d '[:space:]' < "$STATE_FILE")"
+  git cat-file -e "${LAST_SHA}^{commit}" 2>/dev/null || LAST_SHA=""
+fi
+
+if [ -n "$LAST_SHA" ]; then
+  RANGE="${LAST_SHA}..HEAD"
+  ORIGIN="marqueur de derniere synchro"
+elif git rev-parse --verify --quiet '@{u}' >/dev/null 2>&1; then
+  RANGE='@{u}..HEAD'
+  ORIGIN="commits non pousses"
+elif git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+  RANGE="origin/main..HEAD"
+  ORIGIN="ecart avec origin/main"
+elif [ "$BRANCH" != "main" ] && git rev-parse --verify --quiet main >/dev/null 2>&1; then
+  RANGE="main..HEAD"
+  ORIGIN="ecart avec main"
+else
+  TOTAL="$(git rev-list --count HEAD)"
+  N=$(( TOTAL < FALLBACK_COUNT ? TOTAL : FALLBACK_COUNT ))
+  RANGE="HEAD~${N}..HEAD"
+  ORIGIN="${N} derniers commits"
+fi
+
+# %x1f separe les champs : aucun message de commit ne contient cet octet.
+COMMITS_JSON="$(git log --no-merges --format='%H%x1f%s%x1f%aI' "$RANGE" \
+  | jq -R -s -c 'split("\n") | map(select(length > 0)) | map(split("\u001f"))
+                 | map({sha: .[0], subject: .[1], date: .[2]})')"
+
+COUNT="$(jq 'length' <<< "$COMMITS_JSON")"
+if [ "$COUNT" -eq 0 ]; then
+  dim "Rien a synchroniser ($ORIGIN)."
+  exit 0
+fi
+
+FILES_JSON="$(git diff --name-only "$RANGE" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+STAT="$(git diff --shortstat "$RANGE" 2>/dev/null || true)"
+
+PAYLOAD="$(jq -n \
+  --arg repo "$REPO" --arg remote "$REMOTE" --arg branch "$BRANCH" \
+  --arg author "$AUTHOR" --arg teamKey "$TEAM_KEY" --arg stat "$STAT" \
+  --argjson commits "$COMMITS_JSON" --argjson files "$FILES_JSON" \
+  '{repo: $repo, remote: $remote, branch: $branch, author: $author,
+    teamKey: $teamKey, stat: $stat, commits: $commits, files: $files}')"
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  jq . <<< "$PAYLOAD"
+  exit 0
+fi
+
+dim "-> $COUNT commit(s) sur $BRANCH ($ORIGIN)"
+
+HTTP_OUT="$(curl -sS -X POST "$WEBHOOK_URL" \
+  -H 'Content-Type: application/json' \
+  -d "$PAYLOAD" -w '\n%{http_code}' 2>&1)" || die "Appel a n8n impossible. n8n tourne-t-il ? ($WEBHOOK_URL)"
+
+CODE="$(tail -n1 <<< "$HTTP_OUT")"
+BODY="$(sed '$d' <<< "$HTTP_OUT")"
+
+if [ "$CODE" != "200" ]; then
+  red "x n8n a repondu $CODE"
+  printf '%s\n' "$BODY" >&2
+  exit 1
+fi
+
+MESSAGE="$(jq -r '.message // empty' <<< "$BODY" 2>/dev/null || true)"
+printf '%s\n' "${MESSAGE:-$BODY}"
+
+# Marqueur d'idempotence : la prochaine execution repart de ce commit.
+git rev-parse HEAD > "$STATE_FILE"
