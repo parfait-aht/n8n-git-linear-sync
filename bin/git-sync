@@ -78,14 +78,29 @@ elif [ "$BRANCH" != "main" ] && git rev-parse --verify --quiet main >/dev/null 2
   RANGE="main..HEAD"
   ORIGIN="ecart avec main"
 else
+  RANGE=""
   TOTAL="$(git rev-list --count HEAD)"
-  N=$(( TOTAL < FALLBACK_COUNT ? TOTAL : FALLBACK_COUNT ))
-  RANGE="HEAD~${N}..HEAD"
-  ORIGIN="${N} derniers commits"
+  if [ "$TOTAL" -gt "$FALLBACK_COUNT" ]; then
+    RANGE="HEAD~${FALLBACK_COUNT}..HEAD"
+    ORIGIN="${FALLBACK_COUNT} derniers commits"
+  else
+    # Moins d'ancetres que demande : HEAD~$TOTAL designerait le parent du commit
+    # initial, qui n'existe pas. On part de l'arbre vide, son parent implicite.
+    LOG_SPEC=( HEAD )
+    DIFF_SPEC=( "$(git hash-object -t tree /dev/null)" HEAD )
+    ORIGIN="${TOTAL} commit(s), historique complet"
+  fi
+fi
+
+# Une plage "a..b" convient a git log comme a git diff. Seul le repli sur
+# l'historique complet impose deux formes distinctes, d'ou les deux tableaux.
+if [ -n "$RANGE" ]; then
+  LOG_SPEC=( "$RANGE" )
+  DIFF_SPEC=( "$RANGE" )
 fi
 
 # %x1f separe les champs : aucun message de commit ne contient cet octet.
-COMMITS_JSON="$(git log --no-merges --format='%H%x1f%s%x1f%aI' "$RANGE" \
+COMMITS_JSON="$(git log --no-merges --format='%H%x1f%s%x1f%aI' "${LOG_SPEC[@]}" \
   | jq -R -s -c 'split("\n") | map(select(length > 0)) | map(split("\u001f"))
                  | map({sha: .[0], subject: .[1], date: .[2]})')"
 
@@ -95,8 +110,8 @@ if [ "$COUNT" -eq 0 ]; then
   exit 0
 fi
 
-FILES_JSON="$(git diff --name-only "$RANGE" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
-STAT="$(git diff --shortstat "$RANGE" 2>/dev/null || true)"
+FILES_JSON="$(git diff --name-only "${DIFF_SPEC[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+STAT="$(git diff --shortstat "${DIFF_SPEC[@]}" 2>/dev/null || true)"
 
 PAYLOAD="$(jq -n \
   --arg repo "$REPO" --arg remote "$REMOTE" --arg branch "$BRANCH" \
