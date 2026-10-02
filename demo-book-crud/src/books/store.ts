@@ -17,6 +17,10 @@ export function get(id: number): Book | undefined {
   return books.find((book) => book.id === id);
 }
 
+export function exists(id: number): boolean {
+  return books.some((book) => book.id === id);
+}
+
 export function create({ title, authorId }: BookInput): Book {
   const book: Book = { id: nextId++, title, authorId };
   books.push(book);
