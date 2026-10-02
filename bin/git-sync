@@ -113,12 +113,35 @@ fi
 FILES_JSON="$(git diff --name-only "${DIFF_SPEC[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
 STAT="$(git diff --shortstat "${DIFF_SPEC[@]}" 2>/dev/null || true)"
 
+# --- Tests reels avant un passage en Done -----------------------------------
+# Si un commit envoye contient "closes-all" et qu'un fichier .n8ntest existe a
+# la racine, on execute la commande qu'il contient et on recupere son resultat
+# reel (pass/fail), au lieu de laisser n8n deviner. .n8ntest contient une seule
+# ligne de commande, ex : "cd demo-book-crud && npm test"
+TEST_RESULTS_JSON="null"
+if jq -r '.[].subject' <<< "$COMMITS_JSON" | grep -qi 'closes-all'; then
+  if [ -f "$ROOT/.n8ntest" ]; then
+    TEST_CMD="$(cat "$ROOT/.n8ntest")"
+    dim "-> mot-cle closes-all detecte, execution des tests : $TEST_CMD"
+    TEST_OUTPUT="$( (cd "$ROOT" && bash -c "$TEST_CMD") 2>/dev/null | tail -n1 || true)"
+    if jq -e . >/dev/null 2>&1 <<< "$TEST_OUTPUT"; then
+      TEST_RESULTS_JSON="$TEST_OUTPUT"
+    else
+      red "! Resultats de tests illisibles, le passage en Done sera ignore pour cette synchro."
+    fi
+  else
+    dim "-> mot-cle closes-all detecte, mais aucun .n8ntest a la racine : Done ignore."
+  fi
+fi
+
 PAYLOAD="$(jq -n \
   --arg repo "$REPO" --arg remote "$REMOTE" --arg branch "$BRANCH" \
   --arg author "$AUTHOR" --arg teamKey "$TEAM_KEY" --arg stat "$STAT" \
   --argjson commits "$COMMITS_JSON" --argjson files "$FILES_JSON" \
+  --argjson testResults "$TEST_RESULTS_JSON" \
   '{repo: $repo, remote: $remote, branch: $branch, author: $author,
-    teamKey: $teamKey, stat: $stat, commits: $commits, files: $files}')"
+    teamKey: $teamKey, stat: $stat, commits: $commits, files: $files,
+    testResults: $testResults}')"
 
 if [ "$DRY_RUN" -eq 1 ]; then
   jq . <<< "$PAYLOAD"

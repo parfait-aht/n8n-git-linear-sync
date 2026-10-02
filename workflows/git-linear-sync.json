@@ -21,7 +21,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// La charge utile arrive sous .body quand le webhook recoit du JSON en POST.\nconst body = $input.first().json.body ?? $input.first().json;\n\n// Equipe Linear utilisee quand le depot n'en declare aucune.\nconst DEFAULT_TEAM_KEY = 'ALO';\n\nconst teamKey = String(body.teamKey || DEFAULT_TEAM_KEY).toUpperCase();\nconst commits = Array.isArray(body.commits) ? body.commits : [];\n\n// Un identifiant Linear peut apparaitre dans le nom de branche ou dans un message.\nconst haystack = [body.branch || '', ...commits.map(c => c.subject || '')].join(' ');\nconst match = haystack.match(new RegExp('\\\\b' + teamKey + '-(\\\\d+)\\\\b', 'i'));\n\nconst commitsText = commits\n  .map(c => '- ' + String(c.sha).slice(0, 7) + ' ' + c.subject)\n  .join('\\n');\n\nconst filesText = (body.files || []).slice(0, 40).join('\\n');\n\nreturn [{\n  json: {\n    repo: body.repo || 'inconnu',\n    branch: body.branch || 'inconnue',\n    author: body.author || 'inconnu',\n    stat: body.stat || '',\n    teamKey,\n    hasRef: Boolean(match),\n    issueNumber: match ? Number(match[1]) : null,\n    issueIdentifier: match ? teamKey + '-' + match[1] : null,\n    commits,\n    commitsText,\n    filesText,\n  },\n}];"
+        "jsCode": "// La charge utile arrive sous .body quand le webhook recoit du JSON en POST.\nconst body = $input.first().json.body ?? $input.first().json;\n\n// Equipe Linear utilisee quand le depot n'en declare aucune.\nconst DEFAULT_TEAM_KEY = 'ALO';\n\nconst teamKey = String(body.teamKey || DEFAULT_TEAM_KEY).toUpperCase();\nconst commits = Array.isArray(body.commits) ? body.commits : [];\n\n// Un identifiant Linear peut apparaitre dans le nom de branche ou dans un message.\nconst haystack = [body.branch || '', ...commits.map(c => c.subject || '')].join(' ');\nconst match = haystack.match(new RegExp('\\\\b' + teamKey + '-(\\\\d+)\\\\b', 'i'));\n\nconst commitsText = commits\n  .map(c => '- ' + String(c.sha).slice(0, 7) + ' ' + c.subject)\n  .join('\\n');\n\nconst filesText = (body.files || []).slice(0, 40).join('\\n');\n\nreturn [{\n  json: {\n    repo: body.repo || 'inconnu',\n    branch: body.branch || 'inconnue',\n    author: body.author || 'inconnu',\n    stat: body.stat || '',\n    teamKey,\n    hasRef: Boolean(match),\n    issueNumber: match ? Number(match[1]) : null,\n    issueIdentifier: match ? teamKey + '-' + match[1] : null,\n    commits,\n    commitsText,\n    filesText,\n    testResults: body.testResults || null,\n  },\n}];"
       },
       "id": "analyser-le-contexte",
       "name": "Analyser le contexte",
@@ -314,6 +314,152 @@
         2540,
         300
       ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "mot-cle-done-cond",
+              "leftValue": "={{ $('Analyser le contexte').first().json.commitsText.toLowerCase() }}",
+              "rightValue": "closes-all",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "mot-cle-done-present",
+      "name": "Mot-clé Done présent ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2320,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "tous-les-criteres-remplis-cond",
+              "leftValue": "={{ $json.done }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "tous-les-criteres-remplis",
+      "name": "Tous les tests passent ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2980,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'query($teamKey: String!) { workflowStates(filter: { team: { key: { eq: $teamKey } }, type: { eq: \"completed\" } }, first: 1) { nodes { id name } } }',\n  variables: { teamKey: $('Normaliser le ticket').first().json.teamKey }\n}) }}",
+        "options": {}
+      },
+      "id": "linear-etat-done",
+      "name": "Linear · État Done",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation($id: String!, $stateId: String!) { issueUpdate(id: $id, input: { stateId: $stateId }) { success issue { identifier url state { name } } } }',\n  variables: {\n    id: $('Normaliser le ticket').first().json.issueId,\n    stateId: $json.data.workflowStates.nodes[0].id\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "linear-passer-en-done",
+      "name": "Linear · Passer en Done",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3420,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linear.app/graphql",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "linearApi",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  query: 'mutation($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }',\n  variables: {\n    issueId: $('Normaliser le ticket').first().json.issueId,\n    body: 'Mot-cle closes-all detecte : ' + $('Décider Done (tests réels)').first().json.testCount + ' verification(s) executee(s), toutes reussies.\\n\\n' + $('Décider Done (tests réels)').first().json.recap + '\\n\\nTicket passe automatiquement en Done.'\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "linear-commentaire-done",
+      "name": "Linear · Commentaire Done",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3640,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ctx = $('Analyser le contexte').first().json;\nconst testResults = ctx.testResults;\n\nconst results = (testResults && testResults.results) || [];\nconst allPassed = Boolean(testResults) && testResults.allPassed === true && results.length > 0;\n\nconst recap = results\n  .map(r => (r.passed ? '- [x] ' : '- [ ] ') + r.name + (r.error ? ' — ' + r.error : ''))\n  .join('\\n');\n\nreturn [{\n  json: {\n    done: allPassed,\n    testCount: results.length,\n    recap: recap || '(aucun resultat de test recu — .n8ntest absent ou mot-cle non suivi de tests)',\n  },\n}];"
+      },
+      "id": "decider-done-tests-reels",
+      "name": "Décider Done (tests réels)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2760,
+        620
+      ]
     }
   ],
   "connections": {
@@ -481,8 +627,70 @@
             "node": "Réponse",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Mot-clé Done présent ?",
+            "type": "main",
+            "index": 0
           }
         ]
+      ]
+    },
+    "Mot-clé Done présent ?": {
+      "main": [
+        [
+          {
+            "node": "Décider Done (tests réels)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Linear · État Done": {
+      "main": [
+        [
+          {
+            "node": "Linear · Passer en Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Linear · Passer en Done": {
+      "main": [
+        [
+          {
+            "node": "Linear · Commentaire Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Décider Done (tests réels)": {
+      "main": [
+        [
+          {
+            "node": "Tous les tests passent ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tous les tests passent ?": {
+      "main": [
+        [
+          {
+            "node": "Linear · État Done",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     }
   },

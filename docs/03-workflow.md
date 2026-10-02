@@ -1,6 +1,7 @@
 # 03 — Construire le workflow, nœud par nœud
 
-15 nœuds. Compte 1 h 30 la première fois.
+21 nœuds (15 pour le rapprochement + passage en In Progress, 6 pour le passage en
+Done à partir de résultats de tests réels). Compte 1 h 30 la première fois.
 
 Si tu préfères aller vite, importe `workflows/git-linear-sync.json`
 (menu `⋯` en haut à droite → **Import from File**) et lis quand même ce document pour

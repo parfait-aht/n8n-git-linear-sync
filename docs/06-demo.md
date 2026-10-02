@@ -104,7 +104,7 @@ ingénieur, pas en vendeur.
 
 Ouvre le workflow entier, dézoomé.
 
-> « 15 nœuds, aucune ligne de code déployée, une soirée de travail. n8n tourne sur ma
+> « 21 nœuds, aucune ligne de code déployée, une soirée de travail. n8n tourne sur ma
 > machine, gratuitement — la licence n'interdit que la revente du produit. »
 
 Puis la suite logique :

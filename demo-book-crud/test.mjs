@@ -1,6 +1,6 @@
 // test.mjs — verifications reelles contre l'API (pas une estimation).
-// Chaque check correspond a un critere d'acceptation de PAR-5 (books) ou
-// PAR-6 (authors). Resultat final : UNE ligne JSON sur stdout, lue par
+// Chaque check correspond a un critere d'acceptation d'un ticket (PAR-5,
+// PAR-6, PAR-7). Resultat final : UNE ligne JSON sur stdout, lue par
 // bin/git-sync via .n8ntest. Les logs humains partent sur stderr.
 import assert from 'node:assert/strict';
 import { app } from './src/app.ts';
@@ -116,6 +116,47 @@ await check('DELETE /books/:id supprime un livre', 'books', async () => {
   const author = await req('POST', '/authors', { name: 'Author Delete' });
   const book = await req('POST', '/books', { title: 'A supprimer', authorId: author.json.id });
   const res = await req('DELETE', `/books/${book.json.id}`);
+  assert.equal(res.status, 204);
+});
+
+// --- Reviews (PAR-7) ---------------------------------------------------------
+
+await check('POST /reviews cree un avis et renvoie 201', 'reviews', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Reviews' });
+  const book = await req('POST', '/books', { title: 'Livre Avis', authorId: author.json.id });
+  const res = await req('POST', '/reviews', { bookId: book.json.id, rating: 5, comment: 'Super' });
+  assert.equal(res.status, 201);
+  assert.equal(res.json.rating, 5);
+});
+
+await check('POST /reviews renvoie 400 si bookId inconnu', 'reviews', async () => {
+  const res = await req('POST', '/reviews', { bookId: 999999, rating: 4 });
+  assert.equal(res.status, 400);
+});
+
+await check('POST /reviews renvoie 400 si rating hors intervalle', 'reviews', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Reviews 2' });
+  const book = await req('POST', '/books', { title: 'Livre Avis 2', authorId: author.json.id });
+  const res = await req('POST', '/reviews', { bookId: book.json.id, rating: 9 });
+  assert.equal(res.status, 400);
+});
+
+await check('GET /reviews renvoie la liste des avis', 'reviews', async () => {
+  const res = await req('GET', '/reviews');
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray(res.json));
+});
+
+await check('GET /reviews/:id renvoie 404 si absent', 'reviews', async () => {
+  const res = await req('GET', '/reviews/999999');
+  assert.equal(res.status, 404);
+});
+
+await check('DELETE /reviews/:id supprime un avis', 'reviews', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Reviews 3' });
+  const book = await req('POST', '/books', { title: 'Livre Avis 3', authorId: author.json.id });
+  const created = await req('POST', '/reviews', { bookId: book.json.id, rating: 3 });
+  const res = await req('DELETE', `/reviews/${created.json.id}`);
   assert.equal(res.status, 204);
 });
 

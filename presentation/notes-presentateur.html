@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Notes présentateur — git → Linear</title>
+<style>
+  :root {
+    --red: #EA4B71;
+    --red-dark: #B8304F;
+    --dark: #101330;
+    --text: #1A1A2E;
+    --muted: #5C5C6E;
+    --light: #F4F4F6;
+    --border: #E2E2E8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: var(--text);
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  h2.section {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--red-dark);
+    border-bottom: 2px solid var(--red);
+    padding-bottom: 6px;
+    margin-top: 44px;
+  }
+  .slide {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    background: var(--light);
+  }
+  .slide .num {
+    display: inline-block;
+    background: var(--red-dark);
+    color: #fff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    margin-right: 8px;
+  }
+  .slide h3 {
+    display: inline;
+    font-size: 16px;
+    margin: 0;
+  }
+  .slide ul {
+    margin: 10px 0 0;
+    padding-left: 20px;
+  }
+  .slide li {
+    margin-bottom: 4px;
+    font-size: 14.5px;
+  }
+  .optional {
+    border-left: 4px solid var(--muted);
+  }
+  .optional .num { background: var(--muted); }
+  .qa {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    background: var(--light);
+  }
+  .qa .q {
+    font-weight: bold;
+    color: var(--red-dark);
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+  .qa .a {
+    font-size: 14.5px;
+  }
+  pre {
+    background: var(--dark);
+    color: #E8E8F0;
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .checklist label {
+    display: block;
+    font-size: 14.5px;
+    margin-bottom: 6px;
+  }
+  .warn {
+    background: #FFF4E5;
+    border: 1px solid #F3C98B;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 14px 0;
+  }
+  .note {
+    background: #FDEFF2;
+    border: 1px solid #F5C3D0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 14px 0;
+  }
+  @media print {
+    body { padding: 0 10px; }
+    .slide, .qa { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Notes présentateur</h1>
+<div class="sub">git → Linear, avec n8n en local — à usage personnel, ouvrir sur ton téléphone ou un second écran pendant la présentation.</div>
+
+<h2 class="section">Checklist avant de commencer</h2>
+<div class="slide checklist">
+  <label>☐ <code>docker compose ps</code> : n8n + postgres tournent</label>
+  <label>☐ Le workflow est <strong>Published</strong> dans n8n</label>
+  <label>☐ Les 9 nœuds Linear ont leur credential (pas de triangle rouge)</label>
+  <label>☐ <code>Claude · Rapprochement</code> reste désactivé, ok tant qu'on reste sur les branches directes</label>
+  <label>☐ PAR-8 et PAR-9 sont en <strong>Backlog</strong> dans Linear</label>
+  <label>☐ <code>unset N8N_WEBHOOK_URL</code> (repasser sur l'URL de prod si testé en mode test)</label>
+  <label>☐ Trois onglets ouverts : n8n, Linear (vue board), terminal</label>
+</div>
+
+<h2 class="section">Le process complet, du terminal à Linear</h2>
+<div class="slide" style="background:#fff; border:1px solid var(--border);">
+<p>Tout commence quand je tape <code>git-sync</code> dans mon terminal, à la racine du projet. Le script lit d'abord l'état de mon dépôt git en local : la branche sur laquelle je suis, les commits pas encore envoyés (grâce à un petit fichier marqueur caché dans <code>.git/</code>), les fichiers modifiés, et la clé d'équipe Linear à utiliser (lue dans le fichier <code>.n8nsync</code> à la racine). Si un de mes commits contient le mot-clé <code>closes-all</code>, le script fait une étape de plus avant même de contacter n8n : il exécute en local, sur ma propre machine, la commande de test définie dans <code>.n8ntest</code> (par exemple <code>npm test</code> dans <code>demo-book-crud</code>), et récupère le résultat réel, réussite ou échec, de chaque vérification. Tout ce travail, jusqu'ici, se passe entièrement sur mon ordinateur, sans aucun appel réseau.</p>
+
+<p>Le script assemble ensuite toutes ces informations (dépôt, branche, commits, fichiers, et éventuellement le résultat des tests) dans un unique message au format JSON, et l'envoie par une requête HTTP POST vers l'adresse <code>http://localhost:5678/webhook/git-sync</code>. Cette adresse pointe vers le conteneur Docker n8n qui tourne en permanence sur ma machine. Le serveur HTTP intégré à n8n reçoit cette requête, reconnaît le chemin <code>/webhook/git-sync</code> grâce au nœud "Webhook" du workflow, et déclenche une nouvelle exécution de ce workflow avec les données reçues.</p>
+
+<p>Le moteur de n8n parcourt alors le workflow nœud par nœud, en suivant les flèches (les "connections"). Un premier nœud de code analyse le nom de la branche et les messages de commit à la recherche d'un identifiant de ticket du type <code>PAR-5</code>. Si cet identifiant est trouvé, le workflow part directement interroger l'API de Linear pour récupérer ce ticket précis. S'il n'est pas trouvé, le workflow part sur un autre chemin qui ferait appel à Claude pour deviner le bon ticket parmi ceux ouverts, un chemin qu'on laisse de côté aujourd'hui puisque Claude n'est pas connecté.</p>
+
+<p>Une fois le ticket identifié, le workflow appelle l'API GraphQL de Linear à plusieurs reprises : d'abord pour faire passer le ticket à l'état "In Progress", puis pour y ajouter un commentaire qui liste les commits envoyés. Si le mot-clé <code>closes-all</code> était présent et que le résultat des tests reçu plus tôt indique que tout est passé, une branche supplémentaire du workflow se déclenche en parallèle pour faire passer le ticket à l'état "Done", avec un commentaire récapitulatif des vérifications. Pendant ce temps, n8n a déjà renvoyé une réponse HTTP à mon terminal, ce qui explique pourquoi le message affiché dit toujours "In Progress" même quand le ticket finit, l'instant d'après, en Done.</p>
+
+<p>Enfin, si tout s'est bien passé (réponse HTTP 200), le script <code>git-sync</code> met à jour son marqueur local avec le dernier commit envoyé, pour ne jamais renvoyer deux fois le même travail au prochain lancement.</p>
+</div>
+
+<div class="slide">
+  <span class="num">1</span><h3>Titre</h3>
+  <ul>
+    <li>Se présenter en une phrase</li>
+    <li>Annoncer le sujet : automatiser la mise à jour du board Linear à partir du commit</li>
+    <li>Ne pas montrer d'architecture tout de suite, garder la promesse pour plus tard</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">2</span><h3>Le problème</h3>
+  <ul>
+    <li>Poser la question à voix haute, puis laisser le silence répondre (ne pas répondre soi-même)</li>
+    <li>Laisser la salle réagir avant d'enchaîner</li>
+    <li>Transition : ce n'est pas de la négligence</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">3</span><h3>La vraie raison</h3>
+  <ul>
+    <li>Le dev commence une tâche, le ticket ne bouge pas (ou n'existe pas encore)</li>
+    <li>Le chef de projet n'a aucune visibilité réelle sur ce qui avance</li>
+    <li>Insister : pas un problème de discipline, un problème d'incitation (celui qui agit n'est pas celui qui en profite)</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">4</span><h3>La promesse</h3>
+  <ul>
+    <li>Annoncer la solution en une phrase avant de montrer quoi que ce soit à l'écran</li>
+    <li>Garder le suspense : ne pas ouvrir n8n maintenant, montrer le résultat d'abord</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">5</span><h3>Démo 1 — le cas simple</h3>
+  <ul>
+    <li>Terminal prêt à l'avance : branche et commit déjà faits, ne jamais taper de code en direct</li>
+    <li><code>git-sync</code>, puis basculer sur Linear et rafraîchir devant la salle</li>
+    <li>Dire explicitement : aucune IA ici, juste le nom de la branche lu</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">6</span><h3>Démo 2 — le suivi continu</h3>
+  <ul>
+    <li>Faire 2-3 commits successifs sur le même ticket, sans closes-all</li>
+    <li>Montrer les commentaires qui s'accumulent dans Linear à chaque <code>git-sync</code></li>
+    <li>Insister : le statut ne bouge que si le dev le décide explicitement</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">7</span><h3>Démo 3 — le passage en Done</h3>
+  <ul>
+    <li>Montrer le commit avec <code>(closes-all)</code> avant de lancer <code>git-sync --all</code></li>
+    <li>Pendant que ça tourne : les tests s'exécutent en LOCAL avant même l'envoi à n8n</li>
+    <li>Rafraîchir Linear : le ticket passe en Done avec le récap en commentaire</li>
+    <li class="warn">⚠️ Le terminal affichera quand même "-&gt; In Progress" — c'est normal, la réponse part avant la fin de l'évaluation. Le vrai résultat est dans Linear.</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">8</span><h3>n8n, en deux mots</h3>
+  <ul>
+    <li>Aller vite, 1 minute max</li>
+    <li>Un workflow = une suite de nœuds reliés par des flèches, qui s'exécute automatiquement</li>
+    <li>4 types de nœuds suffisent : Déclencheur, Logique (IF), Code, Action (appel API)</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">9</span><h3>Comment ça s'exécute</h3>
+  <ul>
+    <li>Insister sur "Executions" comme outil de diagnostic si quelqu'un demande "et si ça plante ?"</li>
+    <li>Ne pas s'attarder, juste planter le décor</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">10</span><h3>Architecture interne de n8n (optionnelle)</h3>
+  <ul>
+    <li>À dérouler seulement si quelqu'un demande comment n8n est construit</li>
+    <li>3 briques : le moteur qui exécute, les nœuds qui font le travail, le serveur HTTP qui reçoit les appels</li>
+    <li>Insister : le JSON qu'on édite est littéralement ce que n8n fait tourner</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">11</span><h3>Le format JSON d'un workflow (optionnelle)</h3>
+  <ul>
+    <li>Pour qui demande à quoi ressemble vraiment un workflow n8n sous le capot</li>
+    <li>C'est juste un objet JSON classique : un tableau <code>nodes</code>, un objet <code>connections</code></li>
+    <li>Insister : aucune couche cachée, c'est exactement ce que le moteur lit et exécute</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">12</span><h3>Du webhook à la réponse (optionnelle)</h3>
+  <ul>
+    <li>Dérouler les 7 étapes seulement si demandé</li>
+    <li>Les étapes 4 et 5 sont les plus intéressantes pour un dev dans la salle : format de données commun, et comment une branche IF choisit son chemin</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">13</span><h3>n8n et Postgres (optionnelle)</h3>
+  <ul>
+    <li>Pour qui demande ce que Postgres stocke et comment n8n lui parle</li>
+    <li>Le nom "postgres" n'est pas de la magie : c'est du DNS interne Docker standard</li>
+    <li>Rappeler : demo-book-crud n'utilise pas ce Postgres, ses données sont en mémoire</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">14</span><h3>Les états d'un nœud (optionnelle)</h3>
+  <ul>
+    <li>Pour qui demande ce que veut dire un nœud grisé ou les couleurs dans Executions</li>
+    <li>Actif/Désactivé = choix de config ; Succès/Erreur/Non atteint = résultat d'une exécution</li>
+    <li>Exemple vécu en direct : Claude désactivé a fait planter Décider plus loin dans le workflow</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">15</span><h3>Les nœuds du workflow 1/2 (optionnelle)</h3>
+  <ul>
+    <li>Référence complète des nœuds 1 à 11 : à montrer seulement si quelqu'un veut le détail exact</li>
+    <li>Les nœuds 4 à 11 sont les deux chemins (référence directe vs IA) qui convergent sur "Normaliser le ticket"</li>
+  </ul>
+</div>
+
+<div class="slide optional">
+  <span class="num">16</span><h3>Les nœuds du workflow 2/2 (optionnelle)</h3>
+  <ul>
+    <li>Suite : nœuds 12 à 21</li>
+    <li>Nœuds 16 à 21 : le mécanisme Done, indépendant du chemin 1-11 emprunté plus haut</li>
+    <li>"Décider Done" ne fait aucun appel réseau, il lit juste testResults déjà reçu de git-sync</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">17</span><h3>Architecture (les acteurs)</h3>
+  <ul>
+    <li>Parcourir chaque boîte de gauche à droite en nommant l'action qui s'y passe</li>
+    <li>Insister : tout est local sauf deux appels sortants (Linear, Anthropic)</li>
+    <li>Claude ne voit jamais le code, seulement des noms de fichiers et messages de commit</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">18</span><h3>Ce que ça coûte</h3>
+  <ul>
+    <li>Donner les chiffres sans s'excuser, assumer que c'est peu cher</li>
+    <li>Si quelqu'un s'inquiète de la légalité : mentionner la licence fair-code de n8n</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">19</span><h3>Clôture</h3>
+  <ul>
+    <li>Poser la vraie question de décision à la salle, ne pas trancher soi-même</li>
+    <li>Laisser le chef de projet réagir en premier</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">20</span><h3>Merci</h3>
+  <ul>
+    <li>Remercier, ouvrir les questions</li>
+    <li>Rappeler que les détails techniques sont dispo après pour qui veut creuser</li>
+  </ul>
+</div>
+
+<h2 class="section">Questions probables et réponses</h2>
+
+<div class="qa">
+  <div class="q">« Et si l'IA se trompe de ticket ? »</div>
+  <div class="a">Sous 0,7 de confiance, rien n'est modifié. Et tout est réversible : un changement de statut et un commentaire, rien de destructif.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Ça coûte combien en API ? »</div>
+  <div class="a">De l'ordre du centime par appel, et seulement quand la branche ne nomme pas déjà le ticket (sinon zéro appel IA).</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Pourquoi pas l'intégration GitHub native de Linear ? »</div>
+  <div class="a">Elle est très bien quand l'identifiant du ticket est déjà dans la branche. Elle ne fait rien quand il n'y est pas, et c'est précisément le cas fréquent.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Qui maintient ça ? »</div>
+  <div class="a">Vraie question. Un workflow non maintenu est une dette. C'est l'argument pour le mettre sur un serveur partagé et versionner son export plutôt que de le laisser sur un portable.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Vos données partent chez Anthropic ? »</div>
+  <div class="a">Les messages de commit et les noms de fichiers, oui. Jamais le code. Si c'est bloquant, le rapprochement par référence directe fonctionne seul, sans aucun appel IA.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Le passage en Done, c'est fiable ? »</div>
+  <div class="a">Ce n'est pas une estimation : de vrais tests tournent en local, sur la machine du développeur, avant même que quoi que ce soit parte vers n8n. n8n lit un résultat réel (pass/fail), jamais une supposition.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« N'importe qui peut écrire closes-all et forcer un Done ? »</div>
+  <div class="a">Le mot-clé seul ne suffit pas : il faut en plus que les tests réels passent à 100%. Double verrou : un geste volontaire du développeur, plus une vérification réelle.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« On peut l'utiliser sur un autre projet ? »</div>
+  <div class="a">Oui. git-sync est installé globalement sur la machine. Il suffit d'un fichier .n8nsync différent à la racine de l'autre dépôt pour cibler une autre équipe Linear. Le même workflow n8n peut servir plusieurs projets.</div>
+</div>
+
+<div class="qa">
+  <div class="q">« Et sans clé Anthropic connectée (comme aujourd'hui) ? »</div>
+  <div class="a">Ça fonctionne quand même pour le cas courant : tant que l'identifiant du ticket est dans le nom de la branche, aucun appel IA n'est nécessaire. Claude ne sert que si on oublie de le faire.</div>
+</div>
+
+<h2 class="section">Pense-bête — commandes de démo</h2>
+
+<p><strong>Démo 1 — PAR-8 (health-check)</strong></p>
+<pre><code>git checkout main
+git checkout -b feat/par-8-health
+git add demo-book-crud/src/health demo-book-crud/src/app.ts
+git commit -m "feat(health): add health-check endpoint (PAR-8)"
+git-sync</code></pre>
+
+<p><strong>Démo 2 — PAR-9, premier commit (suivi continu, partie 1)</strong></p>
+<pre><code>git checkout main
+git checkout -b feat/par-9-loans
+git add demo-book-crud/src/loans/store.ts
+git commit -m "feat(loans): add in-memory store (PAR-9)"
+git-sync</code></pre>
+<div class="note">Vrai commit (juste le fichier de stockage). Attendu : PAR-9 passe en In Progress, 1er commentaire ajouté.</div>
+
+<p><strong>Démo 2 — PAR-9, deuxième commit (suivi continu, partie 2)</strong></p>
+<pre><code>git add demo-book-crud/src/loans/routes.ts
+git commit -m "feat(loans): add CRUD routes (PAR-9)"
+git-sync</code></pre>
+<div class="note">Deuxième vrai commit (les routes, un fichier différent). Attendu : toujours In Progress, un 2e commentaire s'ajoute au premier.</div>
+
+<p><strong>Démo 3 — PAR-9, commit final (passage en Done)</strong></p>
+<pre><code>git add demo-book-crud/src/app.ts demo-book-crud/src/health demo-book-crud/src/reviews demo-book-crud/test.mjs demo-book-crud/package.json demo-book-crud/src/books/store.ts demo-book-crud/README.md
+git commit -m "feat(loans): wire routes and acceptance tests (closes-all) (PAR-9)"
+git-sync --all</code></pre>
+<div class="note">Troisième vrai commit (le branchement + les tests). Attendu : les tests réels tournent en local, puis PAR-9 passe en Done dans Linear (le terminal affichera quand même "In Progress", voir démo 3 plus haut).</div>
+
+<div class="note">Pour rejouer plusieurs fois : remets PAR-8/PAR-9 en Backlog dans Linear, puis <code>git checkout main &amp;&amp; git branch -D feat/par-8-health feat/par-9-loans</code> avant de recommencer.</div>
+
+</body>
+</html>

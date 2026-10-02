@@ -80,6 +80,43 @@ sans rien déclencher.
 
 ---
 
+## 4.4bis Passer un ticket en Done automatiquement
+
+Le workflow ne fait jamais passer un ticket en Done tout seul — sauf si **les deux**
+conditions suivantes sont réunies :
+
+1. Le sujet d'au moins un commit envoyé contient le mot-clé `closes-all` (insensible à
+   la casse). C'est le geste volontaire qui autorise le reste.
+2. Un fichier `.n8ntest` existe à la racine du dépôt, et la commande qu'il contient
+   — exécutée **localement par `git-sync`, avant tout envoi à n8n** — se termine par
+   un résultat où toutes les vérifications sont réussies.
+
+`.n8ntest` contient une seule ligne : la commande à lancer, par exemple :
+
+```bash
+echo "cd demo-book-crud && npm test" > .n8ntest
+```
+
+Cette commande doit afficher, sur sa dernière ligne de sortie standard, un JSON de la
+forme `{"allPassed": true, "results": [{"name": "...", "passed": true}, ...]}` — c'est
+le contrat que respecte `demo-book-crud/test.mjs`. Aucune IA n'intervient dans cette
+décision : **n8n lit un résultat de test réel, il ne devine jamais**.
+
+```bash
+git commit -m "feat(books): add GET and DELETE endpoints (closes-all)"
+git-sync --all
+```
+
+Si un seul des deux manque (pas de mot-clé, pas de `.n8ntest`, un test échoue, ou le
+JSON renvoyé est illisible), le ticket reste en In Progress avec le commentaire
+habituel — rien ne casse, rien ne se ferme à tort. Un commentaire récapitulatif liste
+toujours quelles vérifications ont réussi ou échoué.
+
+Claude n'intervient plus du tout dans cette décision — il garde son unique autre rôle :
+proposer un ticket quand la branche n'en référence aucun (§3, `Claude · Rapprochement`).
+
+---
+
 ## 4.5 Pointer vers l'URL de test
 
 Pendant la mise au point du workflow, tu veux l'URL de test (celle qui n'est active que
