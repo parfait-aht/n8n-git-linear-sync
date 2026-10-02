@@ -1,0 +1,23 @@
+{
+  "name": "demo-book-crud",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CRUD de demonstration (Hono + TypeScript) pour git-sync -> Linear (tickets PAR-5, PAR-6)",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "tsx test.mjs",
+    "test:authors": "tsx test.mjs authors",
+    "test:books": "tsx test.mjs books"
+  },
+  "dependencies": {
+    "hono": "^4.6.0",
+    "@hono/node-server": "^1.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^22.7.0"
+  }
+}
