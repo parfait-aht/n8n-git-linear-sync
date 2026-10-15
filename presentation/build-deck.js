@@ -373,8 +373,9 @@ demoSlide(
     texte: "n8n lit la branche, trouve la référence, met le ticket à jour. Instantané et gratuit.\nMontrer que la base fonctionne sans magie rend la suite crédible.",
   },
   5,
+  "- AVANT TOUT : lancer ./setup-demo-book-crud.sh une fois depuis la racine du depot (recree health/loans sur le disque)\n" +
   "- Terminal pret a l'avance : branche et commit deja faits, ne jamais taper de code en direct\n" +
-  "- git-sync, puis basculer sur Linear et rafraichir devant la salle\n" +
+  "- git-sync (toujours simple, sans flag, meme regle pour toute la demo), puis basculer sur Linear et rafraichir devant la salle\n" +
   "- Dire explicitement : aucune IA ici, juste le nom de la branche lu"
 );
 

@@ -2,7 +2,9 @@
 
 Un workflow n8n qui lit tes commits, retrouve le ticket Linear correspondant, le passe
 en **In Progress** et y ajoute le détail du travail. Quand aucun ticket ne correspond,
-Claude en propose un.
+Claude en propose un (optionnel — fonctionne aussi sans). Avec le mot-clé `closes-all`
+dans un commit, le ticket peut même passer en **Done** automatiquement, mais seulement
+si de vrais tests, exécutés en local, confirment que tout fonctionne.
 
 Conçu comme support de démonstration pour une équipe de développement et son chef de
 projet — mais utilisable au quotidien.
@@ -29,21 +31,28 @@ commiter.
 ```
 $ git-sync                    script bash, sur ta machine
       │  branche, commits, fichiers modifies
+      │  (+ resultat de tests reels si "closes-all" est detecte)
       ▼
 POST localhost:5678/webhook/git-sync
       │
    [n8n]  ── identifiant de ticket dans la branche ? ──┐
       │                                                 │
       ├─ oui ──────────────────────────────► ticket trouve
-      └─ non ─► Claude lit les tickets ouverts
+      └─ non ─► Claude lit les tickets ouverts (optionnel)
                      ├─ confiance ≥ 0.7 ───► ticket trouve
                      └─ sinon ─────────────► ticket cree
                                                  │
                               statut In Progress + commentaire
+                                                 │
+                        "closes-all" + tests reels tous reussis ?
+                                                 │
+                                        statut Done + recap
 ```
 
 Tout est local : n8n tourne en Docker sur ta machine, le script appelle `localhost`.
-Aucun port n'est exposé sur Internet, aucun tunnel n'est nécessaire.
+Aucun port n'est exposé sur Internet, aucun tunnel n'est nécessaire. Les tests qui
+decident du passage en Done tournent aussi en local, **avant** l'envoi à n8n — n8n ne
+lit jamais le code, seulement un résultat pass/fail.
 
 ---
 
@@ -71,13 +80,20 @@ docker/.env.example           secrets a copier en .env
 bin/git-sync                  le script CLI
 workflows/git-linear-sync.json  export du workflow, en secours
 docs/                         le pas-a-pas
+.n8nsync                      cle d'equipe Linear pour ce depot
+.n8ntest                      commande de test pour le passage en Done
+demo-book-crud/               projet CRUD de demonstration (Hono + TypeScript)
+setup-demo-book-crud.sh       regenere demo-book-crud/
+presentation/                 slides + notes-presentateur.html
 ```
 
 ---
 
 ## Prérequis
 
-Docker, `jq`, un compte Linear, une clé API Anthropic.
+Docker, `jq`, un compte Linear. Une clé API Anthropic est **optionnelle** — seulement
+nécessaire si tu veux le rapprochement automatique par IA ; le reste (In Progress,
+commentaires, passage en Done via tests réels) fonctionne sans.
 
 ---
 

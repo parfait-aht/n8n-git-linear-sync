@@ -3,14 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "CRUD de demonstration (Hono + TypeScript) pour git-sync -> Linear (tickets PAR-5, PAR-6, PAR-7)",
+  "description": "CRUD de demonstration (Hono + TypeScript) pour git-sync -> Linear (tickets PAR-5 a PAR-9)",
   "main": "src/server.ts",
   "scripts": {
     "start": "tsx src/server.ts",
     "test": "tsx test.mjs",
     "test:authors": "tsx test.mjs authors",
     "test:books": "tsx test.mjs books",
-    "test:reviews": "tsx test.mjs reviews"
+    "test:reviews": "tsx test.mjs reviews",
+    "test:health": "tsx test.mjs health",
+    "test:loans": "tsx test.mjs loans"
   },
   "dependencies": {
     "hono": "^4.6.0",

@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Récap git → Linear avec n8n</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #f4f6fa;
+  --surface: #ffffff;
+  --ink: #0e1726;
+  --ink-soft: #4a5568;
+  --line: #dde2ec;
+  --accent: #3b45d1;
+  --accent-soft: #e8eafb;
+  --progress: #c9820a;
+  --progress-soft: #fbf0d9;
+  --done: #1e8e5a;
+  --done-soft: #dcf3e8;
+  --backlog: #7b8496;
+  --backlog-soft: #e9ecf2;
+  --warn-soft: #fdeede;
+  --warn: #b4540a;
+  --code-bg: #0e1726;
+  --code-ink: #dbe3f4;
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0b1220; --surface: #121b2d; --ink: #e8edf7; --ink-soft: #a3adc2;
+    --line: #25314a; --accent: #8c94ff; --accent-soft: #1b2447;
+    --progress-soft: #3a2a0a; --done-soft: #0f3324; --backlog-soft: #1d2638;
+    --warn-soft: #3a2310; --warn: #f0a15f; --code-bg: #070c17;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 16px/1.65 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+
+.layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); max-width: 1180px; margin: 0 auto; }
+.side {
+  position: sticky; top: 0; align-self: start; height: 100vh;
+  padding: 40px 24px 40px 32px; overflow-y: auto;
+}
+.side .brand { font: 700 15px/1.3 var(--font-display); margin: 0 0 28px; }
+.side .brand span { display: block; font: 400 13px var(--font-body); color: var(--ink-soft); margin-top: 2px; }
+.side nav a {
+  display: block; padding: 7px 0 7px 14px; margin-left: -14px;
+  color: var(--ink-soft); text-decoration: none; font-size: 14.5px;
+  border-left: 2px solid transparent;
+}
+.side nav a:hover { color: var(--ink); }
+.side nav a[aria-current="true"] { color: var(--ink); font-weight: 600; border-left-color: var(--accent); }
+
+main { padding: 56px 40px 120px 24px; min-width: 0; }
+.col { max-width: 760px; }
+
+/* Hero */
+.hero h1 {
+  font: 800 clamp(2.4rem, 5.5vw, 3.9rem)/1.02 var(--font-display);
+  letter-spacing: -0.03em; margin: 0 0 18px;
+}
+.hero .lede { font-size: 1.15rem; color: var(--ink-soft); max-width: 58ch; margin: 0 0 32px; }
+
+.term {
+  background: var(--code-bg); color: var(--code-ink); border-radius: 12px;
+  font: 400 14px/1.7 var(--font-mono); padding: 20px 22px; overflow-x: auto; white-space: pre;
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset;
+}
+.term .prompt { color: #7f8bff; user-select: none; }
+.term .dim { color: #7c88a3; }
+.term .ok { color: #5fd7a0; }
+.statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 18px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 13px 5px 11px;
+  border-radius: 999px; font: 600 13.5px/1.3 var(--font-body);
+}
+.pill::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+.pill.backlog { background: var(--backlog-soft); color: var(--backlog); }
+.pill.progress { background: var(--progress-soft); color: var(--progress); }
+.pill.done { background: var(--done-soft); color: var(--done); }
+.statusbar .arrow { color: var(--ink-soft); font-family: var(--font-mono); }
+.statusbar .note { flex-basis: 100%; font-size: 14px; color: var(--ink-soft); margin: 2px 0 0; }
+
+/* Sections */
+section { padding-top: 72px; }
+h2 { font: 700 clamp(1.7rem, 3.4vw, 2.3rem)/1.12 var(--font-display); letter-spacing: -0.02em; margin: 0 0 20px; }
+h3 { font: 700 1.2rem/1.3 var(--font-display); margin: 36px 0 10px; letter-spacing: -0.01em; }
+p { margin: 0 0 16px; max-width: 68ch; }
+ul, ol { padding-left: 1.25em; margin: 0 0 18px; max-width: 68ch; }
+li { margin-bottom: 6px; }
+code {
+  font: 500 0.88em var(--font-mono); background: var(--accent-soft); color: var(--ink);
+  padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; margin: 0 0 20px;
+  font: 400 13.5px/1.65 var(--font-mono);
+}
+pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+.quote {
+  border-left: 3px solid var(--accent); padding: 4px 0 4px 18px; margin: 0 0 20px;
+  font: 500 1.15rem/1.5 var(--font-display); max-width: 56ch;
+}
+
+/* Tables */
+.tablewrap { overflow-x: auto; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 11px 16px; vertical-align: top; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; background: var(--paper); color: var(--ink-soft); font-size: 13.5px; }
+tr:last-child td { border-bottom: 0; }
+td:first-child { min-width: 160px; }
+
+/* Notions: definition list with a left term column */
+.defs { margin: 0 0 24px; border-top: 1px solid var(--line); }
+.defs div { display: grid; grid-template-columns: 190px 1fr; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.defs dt { font: 700 1.02rem/1.35 var(--font-display); }
+.defs dd { margin: 0; color: var(--ink); }
+.defs dd p:last-child { margin-bottom: 0; }
+
+/* Git rail: the journey drawn as a commit graph */
+.rail { list-style: none; padding: 0; margin: 8px 0 28px; max-width: none; position: relative; }
+.rail::before { content: ""; position: absolute; left: 13px; top: 8px; bottom: 8px; width: 2px; background: var(--accent); opacity: .35; }
+.rail li { position: relative; padding: 0 0 22px 52px; margin: 0; }
+.rail li:last-child { padding-bottom: 0; }
+.rail .node {
+  position: absolute; left: 0; top: 0; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--accent); color: var(--accent);
+  display: grid; place-items: center; font: 600 12.5px var(--font-mono);
+}
+.rail li.local .node { background: var(--accent); color: #fff; }
+.rail li.done-step .node { border-color: var(--done); color: var(--done); }
+.rail strong { display: block; font: 700 1.02rem/1.4 var(--font-display); margin-bottom: 2px; }
+.rail p { margin: 0; color: var(--ink-soft); font-size: 15px; }
+.rail .where {
+  display: inline-block; font: 500 12.5px var(--font-mono); padding: 1px 8px; border-radius: 5px;
+  margin-left: 8px; vertical-align: 2px; background: var(--accent-soft); color: var(--accent); font-weight: 500;
+}
+.rail li:not(.local) .where { background: var(--backlog-soft); color: var(--ink-soft); }
+
+.callout {
+  border-radius: 10px; padding: 16px 20px; margin: 0 0 24px; max-width: 68ch;
+  background: var(--warn-soft); border-left: 4px solid var(--warn);
+}
+.callout p:last-child { margin-bottom: 0; }
+.callout.info { background: var(--accent-soft); border-left-color: var(--accent); }
+
+/* Install steps */
+.steps { list-style: none; padding: 0; counter-reset: s; max-width: none; margin: 0; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 8px 52px; margin-bottom: 28px; }
+.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 0; width: 34px; height: 34px;
+  border-radius: 8px; background: var(--ink); color: var(--paper);
+  display: grid; place-items: center; font: 700 15px var(--font-display);
+}
+.steps h3 { margin: 0 0 4px; }
+.steps .time { color: var(--ink-soft); font-size: 14px; margin: 0 0 12px; }
+
+.tree { font-size: 13.5px; }
+.tree .c { color: #7c88a3; }
+
+footer { margin-top: 80px; padding-top: 24px; border-top: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { display: none; }
+  main { padding: 40px 16px 80px; }
+  .defs div { grid-template-columns: 1fr; gap: 4px; }
+}
+
+@media print {
+  @page { margin: 16mm 14mm; }
+  body { background: #fff; font-size: 11pt; }
+  .side { display: none; }
+  .layout { display: block; max-width: none; }
+  main { padding: 0; }
+  section { padding-top: 28px; break-inside: auto; }
+  h2, h3, .steps .time { break-after: avoid; }
+  h3 + p { break-after: avoid; }
+  pre, .tablewrap, .callout, .rail li, .defs div { break-inside: avoid; }
+  .tablewrap { overflow: visible; margin-right: 2px; }
+  footer { display: none; }
+  .term, pre { border: 1px solid #c8cfdd; }
+  a { color: inherit; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside class="side" aria-label="Sommaire">
+  <p class="brand">git → Linear<span>avec n8n en local</span></p>
+  <nav>
+    <a href="#probleme">Le problème et l'idée</a>
+    <a href="#systeme">Ce que fait le système</a>
+    <a href="#notions">Les notions</a>
+    <a href="#parcours">Le parcours complet</a>
+    <a href="#installation">Installation</a>
+    <a href="#demo">La démo</a>
+    <a href="#couts">Coûts et licence</a>
+    <a href="#suite">Aller plus loin</a>
+    <a href="#depot">Contenu du dépôt</a>
+  </nav>
+</aside>
+
+<main>
+<div class="col">
+
+<header class="hero">
+  <h1>Le board Linear se met à jour quand tu commites.</h1>
+  <p class="lede">Un workflow n8n lit tes commits, retrouve le ticket correspondant et le met à jour. Ce récap reprend les notions de la présentation, l'installation complète et la démo. Il accompagne les slides.</p>
+  <div class="term" role="img" aria-label="Sortie du script git-sync dans un terminal"><span class="prompt">$</span> git-sync
+<span class="dim">-&gt; 2 commit(s) sur feat/PAR-5-books-crud (commits non pousses)</span>
+<span class="ok">Ticket PAR-5 -&gt; In Progress (2 commit(s))</span>
+<span class="dim">https://linear.app/equipe/issue/PAR-5</span></div>
+  <div class="statusbar">
+    <span class="pill backlog">Backlog</span><span class="arrow">→</span>
+    <span class="pill progress">In Progress</span><span class="arrow">→</span>
+    <span class="pill done">Done</span>
+    <p class="note">Le ticket avance de lui-même : un commit le passe en In Progress, un commit <code>(closes-all)</code> avec des tests réussis le passe en Done.</p>
+  </div>
+</header>
+
+<section id="probleme">
+  <h2>Le problème et l'idée</h2>
+  <p>Le board Linear ne reflète presque jamais la réalité. Un dev commence une tâche, le ticket ne bouge pas (ou n'existe pas encore), et le chef de projet n'a aucune visibilité sur ce qui avance.</p>
+  <p class="quote">Ce n'est pas un problème de discipline, c'est un problème d'incitation : celui qui déplace la carte n'en tire aucun bénéfice.</p>
+  <p>Le seul geste demandé au dev est celui qu'il fait déjà : commiter. Le reste est automatique.</p>
+</section>
+
+<section id="systeme">
+  <h2>Ce que fait le système</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Action du dev</th><th>Effet dans Linear</th></tr></thead>
+    <tbody>
+      <tr><td><code>git-sync</code> sur une branche qui contient l'identifiant (<code>feat/PAR-5-...</code>)</td><td>Le ticket PAR-5 passe en <strong>In Progress</strong> et reçoit un commentaire listant les commits. Aucune IA n'intervient.</td></tr>
+      <tr><td>Plusieurs <code>git-sync</code> sur le même ticket</td><td>Un commentaire s'ajoute à chaque fois. Le statut ne bouge pas : il ne change que si le dev le décide.</td></tr>
+      <tr><td>Un commit contenant <code>(closes-all)</code></td><td>Les tests tournent en local. S'ils passent tous, le ticket passe en <strong>Done</strong> avec un récap des vérifications. Sinon il reste en In Progress.</td></tr>
+      <tr><td>Aucun identifiant dans la branche (chemin optionnel)</td><td>Claude lit les tickets ouverts et propose le plus proche. Au-dessus de 0,7 de confiance, le ticket est utilisé. Sinon un nouveau ticket est créé.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Tout est réversible : le workflow ne fait que changer un statut et ajouter un commentaire, rien de destructif.</p>
+</section>
+
+<section id="notions">
+  <h2>Les notions à connaître</h2>
+  <dl class="defs">
+    <div><dt>n8n et workflow</dt><dd><p>n8n est un outil d'automatisation. Un workflow est une suite de nœuds reliés par des flèches, qui s'exécute quand un événement le déclenche. Quatre types de nœuds suffisent ici :</p>
+      <ul>
+        <li><strong>Déclencheur</strong> : démarre le workflow (le webhook).</li>
+        <li><strong>Logique (IF)</strong> : choisit un chemin (« référence trouvée ? »).</li>
+        <li><strong>Code</strong> : calcule ou analyse (« analyser le contexte »).</li>
+        <li><strong>Action</strong> : appelle une API (Linear, Anthropic).</li>
+      </ul></dd></div>
+    <div><dt>Webhook</dt><dd>Une adresse HTTP qui attend des données. <code>git-sync</code> envoie un POST à <code>http://localhost:5678/webhook/git-sync</code> ; n8n reconnaît ce chemin et lance une exécution du workflow.</dd></div>
+    <div><dt>Architecture de n8n</dt><dd>Trois briques : le moteur qui exécute le workflow nœud par nœud, les nœuds qui font le travail, et le serveur HTTP qui reçoit les appels. Le workflow est un fichier JSON (un tableau <code>nodes</code>, un objet <code>connections</code>), exactement ce que le moteur exécute. On peut donc le versionner dans git.</dd></div>
+    <div><dt>Postgres</dt><dd>n8n y stocke ses workflows, ses identifiants chiffrés et l'historique des exécutions. Le nom <code>postgres</code> est du DNS interne Docker standard. La démo <code>demo-book-crud</code> n'utilise pas ce Postgres, ses données sont en mémoire.</dd></div>
+    <div><dt>États d'un nœud</dt><dd>Actif ou désactivé est un choix de configuration. Succès, erreur ou non atteint est le résultat d'une exécution. L'onglet <strong>Executions</strong> sert de diagnostic : on y voit les données qui ont traversé chaque nœud.</dd></div>
+    <div><dt>Seuil de confiance</dt><dd>Quand Claude rapproche un commit d'un ticket, il renvoie un score entre 0 et 1. En dessous de 0,7, rien n'est modifié sur un ticket existant.</dd></div>
+    <div><dt>Double verrou du Done</dt><dd><p>Un ticket ne passe en Done que si les deux conditions sont réunies :</p>
+      <ol><li>le dev a écrit volontairement <code>closes-all</code> dans un commit ;</li><li>une vraie commande de test, exécutée en local, renvoie des vérifications toutes réussies.</li></ol>
+      <p>n8n lit un résultat pass/fail réel. Il ne devine jamais.</p></dd></div>
+  </dl>
+</section>
+
+<section id="parcours">
+  <h2>Le parcours complet, du terminal à Linear</h2>
+  <p>Les cercles pleins se passent sur ta machine, avant tout appel réseau. Les cercles vides se passent dans n8n ou chez Linear.</p>
+  <ol class="rail">
+    <li class="local"><span class="node">1</span><strong>Le dev tape <code>git-sync</code><span class="where">local</span></strong><p>À la racine du projet.</p></li>
+    <li class="local"><span class="node">2</span><strong>Le script lit l'état du dépôt<span class="where">local</span></strong><p>Branche, commits pas encore envoyés (marqueur dans <code>.git/n8n-last-sync</code>), fichiers modifiés, clé d'équipe (fichier <code>.n8nsync</code>).</p></li>
+    <li class="local"><span class="node">3</span><strong>Si un commit contient <code>closes-all</code>, les tests tournent<span class="where">local</span></strong><p>La commande de <code>.n8ntest</code> s'exécute sur la machine et le résultat réel de chaque vérification est récupéré.</p></li>
+    <li class="local"><span class="node">4</span><strong>Le script envoie un JSON à n8n<span class="where">local</span></strong><p>POST vers <code>localhost:5678/webhook/git-sync</code>, le conteneur Docker qui tourne sur la machine.</p></li>
+    <li><span class="node">5</span><strong>n8n déclenche le workflow<span class="where">n8n</span></strong><p>Un nœud Code cherche un identifiant du type <code>PAR-5</code> dans la branche et les messages de commit.</p></li>
+    <li><span class="node">6</span><strong>Le ticket est identifié<span class="where">n8n</span></strong><p>Trouvé : n8n interroge l'API GraphQL de Linear. Non trouvé : le chemin optionnel passe par Claude (rapprochement ou création).</p></li>
+    <li><span class="node">7</span><strong>Linear est mis à jour<span class="where">Linear</span></strong><p>Passage en In Progress, puis commentaire listant les commits.</p></li>
+    <li class="done-step"><span class="node">8</span><strong>Passage en Done si les deux verrous sont réunis<span class="where">Linear</span></strong><p>Une branche parallèle passe le ticket en Done avec un commentaire récapitulatif des vérifications.</p></li>
+    <li><span class="node">9</span><strong>Le marqueur local est mis à jour<span class="where">local</span></strong><p>Seulement si n8n a répondu 200. Un échec ne perd aucun commit, et relancer <code>git-sync</code> ne crée pas de commentaire en double.</p></li>
+  </ol>
+
+  <div class="callout info"><p>Le terminal affiche toujours « -> In Progress », même quand le ticket finit en Done juste après : la réponse HTTP part avant la fin de l'évaluation. Le vrai résultat est dans Linear.</p></div>
+
+  <h3>Architecture</h3>
+  <pre><code>git-sync (script bash, sur ta machine)
+   │  branche, commits, fichiers modifiés (+ résultat des tests si closes-all)
+   ▼
+POST localhost:5678/webhook/git-sync   →   n8n (Docker + Postgres)
+   │
+   ├─ identifiant de ticket dans la branche ? ── oui ──► Linear (API GraphQL)
+   └─ non ─► Claude (optionnel) ─────────────────────────► Linear
+                                                           │
+                          In Progress + commentaire  →  Done si closes-all + tests OK</code></pre>
+  <ul>
+    <li><strong>Tout est local.</strong> n8n tourne en Docker sur la machine, aucun port exposé sur Internet, aucun tunnel.</li>
+    <li><strong>Les tests tournent avant l'envoi.</strong> n8n ne lit jamais le code, seulement un résultat pass/fail.</li>
+    <li><strong>Deux appels sortent de la machine :</strong> Linear et, en option, Anthropic. Claude ne voit que des noms de fichiers et des messages de commit.</li>
+  </ul>
+
+  <h3>Les 21 nœuds du workflow</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Nœuds</th><th>Rôle</th></tr></thead>
+    <tbody>
+      <tr><td>1 à 3</td><td>Webhook, analyse du contexte, test « référence trouvée ? »</td></tr>
+      <tr><td>4</td><td>Chemin direct : récupérer le ticket nommé dans la branche</td></tr>
+      <tr><td>5 à 10</td><td>Chemin IA (optionnel) : contexte équipe, appel à Claude, décision, création de ticket si besoin</td></tr>
+      <tr><td>11</td><td>« Normaliser le ticket » : les deux chemins convergent</td></tr>
+      <tr><td>12 à 14</td><td>Passage en In Progress, ajout du commentaire</td></tr>
+      <tr><td>15</td><td>Réponse HTTP au script</td></tr>
+      <tr><td>16 à 21</td><td>Mécanisme Done : mot-clé, décision sur les tests réels, passage en Done, commentaire de récap</td></tr>
+    </tbody>
+  </table></div>
+  <p>Le détail de chaque nœud est dans <code>docs/03-workflow.md</code>.</p>
+</section>
+
+<section id="installation">
+  <h2>Installation</h2>
+  <p>Prérequis : Docker, <code>jq</code>, un compte Linear. La clé API Anthropic est optionnelle, elle ne sert qu'au rapprochement par IA. Le reste (In Progress, commentaires, Done via tests réels) fonctionne sans.</p>
+
+  <ol class="steps">
+    <li>
+      <h3>Installer n8n en local</h3>
+      <p class="time">10 minutes · <code>docs/01-installation.md</code></p>
+<pre><code>cd docker
+cp .env.example .env
+
+# génère les deux secrets, puis remplace les REMPLACE_MOI dans .env
+echo "POSTGRES_PASSWORD=$(openssl rand -hex 16)"
+echo "N8N_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+
+docker compose up -d
+docker compose ps    # n8n et postgres : running, postgres (healthy)</code></pre>
+      <p>Ouvre <a href="http://localhost:5678">http://localhost:5678</a> et crée le compte propriétaire. Il est local à ta machine, sans lien avec n8n Cloud.</p>
+      <div class="callout"><p><strong>La clé <code>N8N_ENCRYPTION_KEY</code> est le point critique.</strong> n8n s'en sert pour chiffrer tes identifiants. Perdue ou modifiée après le premier démarrage, elle les rend illisibles, même dans une sauvegarde. Garde-la dans un gestionnaire de mots de passe. Le fichier <code>.env</code> n'est jamais versionné.</p></div>
+    </li>
+    <li>
+      <h3>Créer les identifiants</h3>
+      <p class="time">10 minutes · <code>docs/02-credentials.md</code></p>
+      <ul>
+        <li><strong>Linear</strong> : Settings → Security &amp; access → Personal API keys. Dans n8n : Credentials → type <em>Linear API</em>, nom <code>Linear</code>, authentification <code>API Token</code>, puis Test.</li>
+        <li><strong>Anthropic (optionnel)</strong> : crée une clé sur la console Anthropic. Dans n8n : Credentials → <em>Header Auth</em>, nom <code>Anthropic</code>, Name <code>x-api-key</code>, Value = la clé <code>sk-ant-...</code>.</li>
+        <li>Note la <strong>clé d'équipe</strong> Linear : le préfixe de tes tickets (<code>PAR</code> dans <code>PAR-5</code>).</li>
+      </ul>
+    </li>
+    <li>
+      <h3>Mettre en place le workflow</h3>
+      <p class="time">5 minutes en important, 1 h 30 en le construisant · <code>docs/03-workflow.md</code></p>
+      <p>Le plus rapide : importer <code>workflows/git-linear-sync.json</code> (menu <code>⋯</code> en haut à droite → Import from File), puis rattacher le credential Linear à chaque nœud Linear (plus aucun triangle rouge). Active ensuite le workflow avec l'interrupteur <strong>Active</strong>.</p>
+    </li>
+    <li>
+      <h3>Installer le script <code>git-sync</code></h3>
+      <p class="time">10 minutes · <code>docs/04-script-git-sync.md</code></p>
+<pre><code>ln -sf &lt;chemin-du-depot&gt;/bin/git-sync /usr/local/bin/git-sync
+# Apple Silicon, si /usr/local/bin n'est pas dans le PATH :
+# ln -sf &lt;chemin-du-depot&gt;/bin/git-sync /opt/homebrew/bin/git-sync
+
+which git-sync &amp;&amp; git-sync --help
+
+# dans le dépôt du projet
+echo "PAR" &gt; .n8nsync</code></pre>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Commande</th><th>Effet</th></tr></thead>
+        <tbody>
+          <tr><td><code>git-sync</code></td><td>Usage normal</td></tr>
+          <tr><td><code>git-sync --dry-run</code></td><td>Affiche ce qui serait envoyé, sans appeler n8n</td></tr>
+          <tr><td><code>git-sync --all</code></td><td>Ignore le marqueur et renvoie toute la branche</td></tr>
+          <tr><td><code>git-sync --team WEB</code></td><td>Force la clé d'équipe</td></tr>
+        </tbody>
+      </table></div>
+    </li>
+    <li>
+      <h3>Activer le passage en Done (optionnel)</h3>
+      <p>Crée un fichier <code>.n8ntest</code> à la racine du projet, avec une seule ligne : la commande de test.</p>
+<pre><code>echo "cd demo-book-crud &amp;&amp; npm test" &gt; .n8ntest</code></pre>
+      <p>Cette commande doit afficher, sur la dernière ligne de sa sortie, un JSON de cette forme :</p>
+<pre><code>{"allPassed": true, "results": [{"name": "...", "passed": true}]}</code></pre>
+    </li>
+    <li>
+      <h3>Valider avant de présenter</h3>
+      <p class="time">30 minutes · <code>docs/05-tests.md</code></p>
+      <p>Cinq scénarios : ticket nommé dans la branche, rapprochement par IA, création de ticket, idempotence (relancer <code>git-sync</code> ne renvoie rien), passage en Done. Le document contient aussi un tableau de diagnostic des erreurs fréquentes.</p>
+    </li>
+  </ol>
+
+  <h3>Commandes Docker utiles</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Besoin</th><th>Commande (depuis <code>docker/</code>)</th></tr></thead>
+    <tbody>
+      <tr><td>Démarrer / arrêter</td><td><code>docker compose up -d</code> / <code>docker compose stop</code></td></tr>
+      <tr><td>Voir les logs</td><td><code>docker compose logs -f n8n</code></td></tr>
+      <tr><td>Mettre à jour n8n</td><td><code>docker compose pull &amp;&amp; docker compose up -d</code></td></tr>
+      <tr><td>Sauvegarder la base</td><td><code>docker compose exec postgres pg_dump -U n8n n8n &gt; ~/n8n-backup.sql</code></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>docker compose down</code> supprime les conteneurs mais garde les volumes, donc tes workflows survivent. <code>docker compose down -v</code> efface tout.</p>
+</section>
+
+<section id="demo">
+  <h2>La démo</h2>
+  <h3>Le projet <code>demo-book-crud</code></h3>
+  <p>Une petite API REST en TypeScript avec Hono, au stockage en mémoire. Son but est de produire de vrais commits à synchroniser, pas de livrer un service de production. Chaque ressource correspond à un ticket Linear :</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Ticket</th><th>Ressource</th></tr></thead>
+    <tbody>
+      <tr><td>PAR-5</td><td>Livres (<code>/books</code>)</td></tr>
+      <tr><td>PAR-6</td><td>Auteurs (<code>/authors</code>)</td></tr>
+      <tr><td>PAR-7</td><td>Avis sur les livres (<code>/reviews</code>)</td></tr>
+      <tr><td>PAR-8</td><td>Health-check (<code>/health</code>)</td></tr>
+      <tr><td>PAR-9</td><td>Emprunts (<code>/loans</code>)</td></tr>
+    </tbody>
+  </table></div>
+<pre><code>cd demo-book-crud
+npm install
+npm start            # lance l'API
+npm test             # toutes les vérifications
+npm run test:books   # une ressource à la fois</code></pre>
+  <p>Chaque test correspond à un critère d'acceptation d'un ticket. Son résultat réel (pass/fail, jamais une estimation) est lu par <code>git-sync</code> via <code>.n8ntest</code> pour décider du passage en Done.</p>
+
+  <h3>Préparation avant de démarrer</h3>
+  <ul>
+    <li><code>docker compose ps</code> : n8n et postgres tournent.</li>
+    <li>Le workflow est Published, tous les nœuds Linear ont leur credential.</li>
+    <li>Les tickets de démo (par exemple PAR-8 et PAR-9) sont en <strong>Backlog</strong> dans Linear.</li>
+    <li>Trois onglets ouverts : n8n, Linear (vue board), terminal.</li>
+    <li><code>unset N8N_WEBHOOK_URL</code> pour repasser sur l'URL de production.</li>
+    <li><code>./setup-demo-book-crud.sh</code> lancé une fois à la racine du dépôt, juste avant de commencer : il recrée les fichiers de démo non committés.</li>
+    <li>Branches et commits préparés à l'avance, rien n'est tapé en direct.</li>
+  </ul>
+
+  <h3>Déroulé</h3>
+  <ol class="rail">
+    <li><span class="node">1</span><strong>La douleur</strong><p>On ouvre le board Linear et on demande s'il reflète ce sur quoi l'équipe travaille. On laisse le silence répondre.</p></li>
+    <li><span class="node">2</span><strong>La promesse</strong><p>Le board se met à jour tout seul à partir de la seule chose qu'un dev fait toujours : commiter.</p></li>
+    <li><span class="node">3</span><strong>Démo 1 : le cas simple</strong><p>Branche qui nomme le ticket. <code>git log --oneline -3</code> puis <code>git-sync</code>. On rafraîchit Linear : le ticket est en In Progress, avec le commentaire des commits. Aucune IA, n8n a lu le nom de la branche.</p></li>
+    <li><span class="node">4</span><strong>Démo 2 : le suivi continu</strong><p>Deux ou trois commits sur le même ticket, chacun suivi d'un <code>git-sync</code>. Les commentaires s'accumulent, le statut reste en In Progress.</p></li>
+    <li class="done-step"><span class="node">5</span><strong>Démo 3 : le passage en Done</strong><p>On montre le commit <code>(closes-all)</code>, puis <code>git-sync</code>. Les tests tournent en local avant l'envoi. On rafraîchit Linear : le ticket est en Done, avec le récap des vérifications.</p></li>
+    <li><span class="node">6</span><strong>n8n en deux mots</strong><p>Le workflow dézoomé (21 nœuds, aucune ligne de code déployée) et l'onglet Executions.</p></li>
+    <li><span class="node">7</span><strong>Ce que ça coûte, puis clôture</strong><p>Voir la section suivante.</p></li>
+  </ol>
+  <p>Le déroulé exact et le pense-bête de commandes sont dans <code>presentation/notes-presentateur.html</code>.</p>
+</section>
+
+<section id="couts">
+  <h2>Coûts et licence</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Poste</th><th>Coût</th></tr></thead>
+    <tbody>
+      <tr><td>n8n auto-hébergé</td><td>Gratuit et illimité en usage interne (licence <em>fair-code</em>, Sustainable Use License). La revente de n8n en tant que service est interdite.</td></tr>
+      <tr><td>Linear</td><td>Un compte suffit.</td></tr>
+      <tr><td>API Anthropic</td><td>Optionnelle. De l'ordre du centime par rapprochement, et seulement quand la branche ne nomme pas déjà le ticket. Sinon, zéro appel IA.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="suite">
+  <h2>Aller plus loin</h2>
+  <ul>
+    <li><strong>Serveur partagé.</strong> Pour que toute l'équipe en profite, n8n peut passer sur un VPS. La procédure et la configuration de sécurité sont dans <code>docs/07-vps.md</code>.</li>
+    <li><strong>Hook <code>pre-push</code>.</strong> Il déclenche <code>git-sync</code> à chaque push. Le <code>|| true</code> est volontaire : une panne de n8n ne doit jamais bloquer un push.</li>
+    <li><strong>Maintenance.</strong> Un workflow non maintenu devient une dette. Versionner son export (<code>workflows/git-linear-sync.json</code>) évite qu'il ne vive que sur un portable.</li>
+  </ul>
+</section>
+
+<section id="depot">
+  <h2>Contenu du dépôt</h2>
+<pre class="tree"><code>docker/docker-compose.yml        n8n + postgres
+docker/.env.example              secrets à copier en .env
+bin/git-sync                     le script CLI
+workflows/git-linear-sync.json   export du workflow
+docs/                            le pas-à-pas (01 à 07)
+.n8nsync                         clé d'équipe Linear pour ce dépôt
+.n8ntest                         commande de test pour le passage en Done
+demo-book-crud/                  API de démonstration (Hono + TypeScript)
+setup-demo-book-crud.sh          régénère demo-book-crud/
+presentation/                    slides + notes présentateur</code></pre>
+</section>
+
+<footer>Récap de la présentation « git → Linear, avec n8n en local ». Détails complets dans le dossier <code>docs/</code> du dépôt.</footer>
+
+</div>
+</main>
+</div>
+
+<script>
+(function () {
+  var links = [].slice.call(document.querySelectorAll('.side nav a'));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+  if (!('IntersectionObserver' in window)) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) {
+        links.forEach(function (a) { a.removeAttribute('aria-current'); });
+        map[e.target.id].setAttribute('aria-current', 'true');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  Object.keys(map).forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) io.observe(el);
+  });
+})();
+</script>
+</body>
+</html>

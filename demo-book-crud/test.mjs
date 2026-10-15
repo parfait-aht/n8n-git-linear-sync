@@ -1,7 +1,7 @@
 // test.mjs — verifications reelles contre l'API (pas une estimation).
-// Chaque check correspond a un critere d'acceptation d'un ticket (PAR-5,
-// PAR-6, PAR-7). Resultat final : UNE ligne JSON sur stdout, lue par
-// bin/git-sync via .n8ntest. Les logs humains partent sur stderr.
+// Chaque check correspond a un critere d'acceptation d'un ticket (PAR-5 a
+// PAR-9). Resultat final : UNE ligne JSON sur stdout, lue par bin/git-sync
+// via .n8ntest. Les logs humains partent sur stderr.
 import assert from 'node:assert/strict';
 import { app } from './src/app.ts';
 
@@ -28,6 +28,14 @@ async function req(method, path, body) {
   const text = await res.text();
   return { status: res.status, json: text ? JSON.parse(text) : null };
 }
+
+// --- Health (PAR-8) ----------------------------------------------------------
+
+await check('GET /health renvoie 200 avec status ok', 'health', async () => {
+  const res = await req('GET', '/health');
+  assert.equal(res.status, 200);
+  assert.equal(res.json.status, 'ok');
+});
 
 // --- Authors (PAR-6) -------------------------------------------------------
 
@@ -157,6 +165,49 @@ await check('DELETE /reviews/:id supprime un avis', 'reviews', async () => {
   const book = await req('POST', '/books', { title: 'Livre Avis 3', authorId: author.json.id });
   const created = await req('POST', '/reviews', { bookId: book.json.id, rating: 3 });
   const res = await req('DELETE', `/reviews/${created.json.id}`);
+  assert.equal(res.status, 204);
+});
+
+// --- Loans (PAR-9) ------------------------------------------------------------
+
+await check('POST /loans cree un emprunt et renvoie 201', 'loans', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Loans' });
+  const book = await req('POST', '/books', { title: 'Livre Emprunt', authorId: author.json.id });
+  const res = await req('POST', '/loans', { bookId: book.json.id, borrowerName: 'Alice' });
+  assert.equal(res.status, 201);
+  assert.equal(res.json.borrowerName, 'Alice');
+});
+
+await check('POST /loans renvoie 400 si bookId inconnu', 'loans', async () => {
+  const res = await req('POST', '/loans', { bookId: 999999, borrowerName: 'Bob' });
+  assert.equal(res.status, 400);
+});
+
+await check('GET /loans renvoie la liste des emprunts', 'loans', async () => {
+  const res = await req('GET', '/loans');
+  assert.equal(res.status, 200);
+  assert.ok(Array.isArray(res.json));
+});
+
+await check('GET /loans/:id renvoie 404 si absent', 'loans', async () => {
+  const res = await req('GET', '/loans/999999');
+  assert.equal(res.status, 404);
+});
+
+await check('PUT /loans/:id marque l\'emprunt comme rendu', 'loans', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Loans 2' });
+  const book = await req('POST', '/books', { title: 'Livre Emprunt 2', authorId: author.json.id });
+  const loan = await req('POST', '/loans', { bookId: book.json.id, borrowerName: 'Chloe' });
+  const res = await req('PUT', `/loans/${loan.json.id}`, {});
+  assert.equal(res.status, 200);
+  assert.ok(res.json.returnedAt);
+});
+
+await check('DELETE /loans/:id supprime un emprunt', 'loans', async () => {
+  const author = await req('POST', '/authors', { name: 'Author Loans 3' });
+  const book = await req('POST', '/books', { title: 'Livre Emprunt 3', authorId: author.json.id });
+  const loan = await req('POST', '/loans', { bookId: book.json.id, borrowerName: 'Dan' });
+  const res = await req('DELETE', `/loans/${loan.json.id}`);
   assert.equal(res.status, 204);
 });
 

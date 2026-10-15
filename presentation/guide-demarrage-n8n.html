@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Démarrer avec n8n — guide pour débutant</title>
+<style>
+  :root {
+    --red: #EA4B71;
+    --red-dark: #B8304F;
+    --dark: #101330;
+    --text: #1A1A2E;
+    --muted: #5C5C6E;
+    --light: #F4F4F6;
+    --border: #E2E2E8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: var(--text);
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+    line-height: 1.5;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+  }
+  .sub {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 28px;
+  }
+  h2.section {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--red-dark);
+    border-bottom: 2px solid var(--red);
+    padding-bottom: 6px;
+    margin-top: 44px;
+  }
+  .slide {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    background: var(--light);
+  }
+  .slide .num {
+    display: inline-block;
+    background: var(--red-dark);
+    color: #fff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 20px;
+    margin-right: 8px;
+  }
+  .slide h3 {
+    display: inline;
+    font-size: 16px;
+    margin: 0;
+  }
+  .slide ul {
+    margin: 10px 0 0;
+    padding-left: 20px;
+  }
+  .slide li {
+    margin-bottom: 4px;
+    font-size: 14.5px;
+  }
+  .optional {
+    border-left: 4px solid var(--muted);
+  }
+  .optional .num { background: var(--muted); }
+  .qa {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    background: var(--light);
+  }
+  .qa .q {
+    font-weight: bold;
+    color: var(--red-dark);
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+  .qa .a {
+    font-size: 14.5px;
+  }
+  pre {
+    background: var(--dark);
+    color: #E8E8F0;
+    padding: 14px 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  .checklist label {
+    display: block;
+    font-size: 14.5px;
+    margin-bottom: 6px;
+  }
+  .warn {
+    background: #FFF4E5;
+    border: 1px solid #F3C98B;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 14px 0;
+  }
+  .note {
+    background: #FDEFF2;
+    border: 1px solid #F5C3D0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    margin: 14px 0;
+  }
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 14px 0;
+  }
+  .compare .col {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    background: #fff;
+  }
+  .compare .col h4 {
+    margin: 0 0 8px;
+    font-size: 15px;
+    color: var(--red-dark);
+  }
+  .compare .col ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 13.5px;
+  }
+  .compare .col li {
+    margin-bottom: 4px;
+  }
+  @media (max-width: 600px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+  @media print {
+    body { padding: 0 10px; }
+    .slide, .qa { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Démarrer avec n8n</h1>
+<div class="sub">Guide pour quelqu'un qui n'a jamais ouvert n8n — à distribuer après la présentation du projet git → Linear.</div>
+
+<h2 class="section">C'est quoi, n8n</h2>
+<div class="slide" style="background:#fff;">
+<p>n8n est un outil d'automatisation : on construit un <strong>workflow</strong>, une suite de <strong>nœuds</strong> reliés par des flèches, et n8n l'exécute automatiquement quand il se déclenche (sur un appel HTTP, une tâche planifiée, un clic manuel...). Chaque nœud fait une chose précise : recevoir un appel, lire ou écrire dans une API, transformer des données, tester une condition.</p>
+<p style="margin-bottom:0">C'est exactement ce que fait le workflow montré dans la présentation : il reçoit les infos d'un <code>git-sync</code>, retrouve le ticket Linear correspondant, et met à jour son statut.</p>
+</div>
+
+<h2 class="section">Deux façons de commencer</h2>
+<div class="compare">
+  <div class="col">
+    <h4>n8n Cloud</h4>
+    <ul>
+      <li>Aucune installation</li>
+      <li>Essai gratuit 14 jours, fonctions Pro incluses</li>
+      <li>1000 exécutions pendant l'essai</li>
+      <li>Le plus rapide pour essayer tout de suite</li>
+    </ul>
+  </div>
+  <div class="col">
+    <h4>En local (sur ta machine)</h4>
+    <ul>
+      <li>Gratuit et illimité, sans compte</li>
+      <li>Besoin de Docker installé</li>
+      <li>Tes données restent chez toi</li>
+      <li>Nécessaire pour rejouer la démo exacte du projet</li>
+    </ul>
+  </div>
+</div>
+
+<div class="slide">
+  <span class="num">A</span><h3>Option Cloud — le plus rapide</h3>
+  <ul>
+    <li>Va sur <code>app.n8n.cloud/register</code> et crée un compte</li>
+    <li>L'essai gratuit donne 14 jours avec les fonctions du plan Pro</li>
+    <li>Une instance n8n t'es attribuée directement, accessible depuis un navigateur, rien à installer</li>
+    <li>Passe directement à la section <strong>Ton premier workflow</strong> plus bas</li>
+  </ul>
+</div>
+
+<div class="slide">
+  <span class="num">B</span><h3>Option locale — avec Docker</h3>
+  <ul>
+    <li>Prérequis : Docker installé et démarré (<code>docker --version</code> pour vérifier)</li>
+    <li>Une seule commande officielle installe et démarre tout :</li>
+  </ul>
+  <pre>curl -fsSL https://get.n8n.io | sh</pre>
+  <ul>
+    <li>Le script vérifie Docker, crée un dossier <code>./n8n</code> avec sa configuration, puis démarre</li>
+    <li>Une fois prêt, l'éditeur est accessible sur <code>http://localhost:5678</code></li>
+  </ul>
+  <div class="note">Ce script installe un n8n générique, pour explorer l'outil. Pour reproduire exactement la démo de ce projet (webhook <code>git-sync</code>, nœuds Linear déjà configurés), suis plutôt <code>docs/01-installation.md</code> à la racine du dépôt : il utilise le <code>docker-compose.yml</code> du projet, avec Postgres au lieu de SQLite.</div>
+</div>
+
+<h2 class="section">Ton premier workflow</h2>
+<div class="slide">
+  <span class="num">1</span><h3>Créer un nouveau workflow</h3>
+  <ul>
+    <li>Dans l'éditeur n8n (Cloud ou local), clique sur <strong>New Workflow</strong></li>
+  </ul>
+</div>
+<div class="slide">
+  <span class="num">2</span><h3>Ajouter un déclencheur manuel</h3>
+  <ul>
+    <li>Clique sur le <strong>+</strong> pour ajouter un nœud, cherche <strong>Manual Trigger</strong></li>
+    <li>C'est le déclencheur le plus simple : il démarre le workflow quand tu cliques sur un bouton, sans attendre d'appel externe</li>
+  </ul>
+</div>
+<div class="slide">
+  <span class="num">3</span><h3>Ajouter un nœud Edit Fields</h3>
+  <ul>
+    <li>Clique sur le <strong>+</strong> à la sortie du déclencheur, cherche <strong>Edit Fields (Set)</strong></li>
+    <li>Ajoute un champ, par exemple <code>message</code> avec la valeur <code>Bonjour depuis n8n</code></li>
+    <li>Ce nœud fabrique ou transforme des données, exactement comme le ferait un nœud de la démo qui prépare les infos avant d'appeler Linear</li>
+  </ul>
+</div>
+<div class="slide">
+  <span class="num">4</span><h3>Exécuter et vérifier</h3>
+  <ul>
+    <li>Clique sur <strong>Execute workflow</strong> en bas de l'éditeur</li>
+    <li>Les deux nœuds s'allument en vert, et le résultat (ton champ <code>message</code>) s'affiche dans le panneau de droite</li>
+    <li class="warn">Si un nœud reste gris ou passe en rouge, clique dessus : le panneau de droite affiche l'erreur précise.</li>
+  </ul>
+</div>
+
+<h2 class="section">Pour aller plus loin</h2>
+<div class="slide" style="background:#fff;">
+<p style="margin-bottom:0">Pour rejouer la démo complète (le lien entre un commit git et un ticket Linear), suis les documents du dépôt dans l'ordre : <code>docs/01-installation.md</code>, <code>docs/02-credentials.md</code>, <code>docs/03-workflow.md</code>, <code>docs/04-script-git-sync.md</code>, <code>docs/05-tests.md</code>. Le fichier <code>README.md</code> à la racine résume l'architecture complète.</p>
+</div>
+
+<h2 class="section">Questions probables</h2>
+<div class="qa">
+  <div class="q">C'est payant ?</div>
+  <div class="a">En local, non : l'auto-hébergement est gratuit et illimité pour un usage interne (licence fair-code). n8n Cloud a un essai gratuit de 14 jours puis des plans payants si tu veux continuer sans gérer de serveur.</div>
+</div>
+<div class="qa">
+  <div class="q">Cloud ou local, lequel choisir pour essayer ?</div>
+  <div class="a">Cloud si tu veux juste voir ce que ça donne en 5 minutes, sans rien installer. Local si tu veux un outil que tu gardes gratuitement après l'essai, ou si tu veux rejouer la démo exacte du projet.</div>
+</div>
+<div class="qa">
+  <div class="q">Je peux changer d'avis plus tard et passer de Cloud à local (ou l'inverse) ?</div>
+  <div class="a">Oui, un workflow s'exporte en JSON et se réimporte ailleurs — rien n'est enfermé dans l'un ou l'autre.</div>
+</div>
+
+</body>
+</html>
