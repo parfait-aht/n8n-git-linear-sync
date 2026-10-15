@@ -104,7 +104,7 @@ décision : **n8n lit un résultat de test réel, il ne devine jamais**.
 
 ```bash
 git commit -m "feat(books): add GET and DELETE endpoints (closes-all)"
-git-sync --all
+git-sync
 ```
 
 Si un seul des deux manque (pas de mot-clé, pas de `.n8ntest`, un test échoue, ou le

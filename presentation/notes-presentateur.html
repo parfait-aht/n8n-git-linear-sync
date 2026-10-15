@@ -143,6 +143,7 @@
   <label>☐ PAR-8 et PAR-9 sont en <strong>Backlog</strong> dans Linear</label>
   <label>☐ <code>unset N8N_WEBHOOK_URL</code> (repasser sur l'URL de prod si testé en mode test)</label>
   <label>☐ Trois onglets ouverts : n8n, Linear (vue board), terminal</label>
+  <label>☐ <strong><code>./setup-demo-book-crud.sh</code> lancé une fois</strong>, depuis la racine du dépôt, juste avant de commencer (recrée <code>health</code>/<code>loans</code> sur le disque — voir pourquoi dans le Pense-bête plus bas)</label>
 </div>
 
 <h2 class="section">Le process complet, du terminal à Linear</h2>
@@ -214,7 +215,7 @@
 <div class="slide">
   <span class="num">7</span><h3>Démo 3 — le passage en Done</h3>
   <ul>
-    <li>Montrer le commit avec <code>(closes-all)</code> avant de lancer <code>git-sync --all</code></li>
+    <li>Montrer le commit avec <code>(closes-all)</code> avant de lancer <code>git-sync</code></li>
     <li>Pendant que ça tourne : les tests s'exécutent en LOCAL avant même l'envoi à n8n</li>
     <li>Rafraîchir Linear : le ticket passe en Done avec le récap en commentaire</li>
     <li class="warn">⚠️ Le terminal affichera quand même "-&gt; In Progress" — c'est normal, la réponse part avant la fin de l'évaluation. Le vrai résultat est dans Linear.</li>
@@ -381,14 +382,24 @@
 
 <h2 class="section">Pense-bête — commandes de démo</h2>
 
+<div class="note"><strong>Règle la plus simple :</strong> <code>git-sync</code>, toujours, partout, sans aucun flag. La seule chose qui change pour clôturer un ticket, c'est le mot <code>closes-all</code> dans le message du commit. Copie-colle-le toujours depuis cette page plutôt que de le retaper, pour éviter toute faute de frappe.</div>
+
+<p><strong>Étape 0 — avant tout, une seule fois</strong></p>
+<pre><code>cd /Users/dev/Documents/www/n8n-git-linear-sync
+./setup-demo-book-crud.sh</code></pre>
+<div class="note"><strong>Pourquoi :</strong> <code>health</code> et <code>loans</code> ne sont pas committés sur <code>main</code> (exprès, pour que les démos ci-dessous restent de vrais commits). Ce script les recrée sur le disque. <code>books</code>/<code>authors</code>/<code>reviews</code> sont déjà sur <code>main</code>, le script ne fait rien d'utile dessus mais ne casse rien non plus.</div>
+
 <p><strong>Démo 1 — PAR-8 (health-check)</strong></p>
+<div class="note"><strong>Ce que ça montre :</strong> le cas simple — l'identifiant du ticket est dans le nom de la branche, n8n le trouve directement, aucune IA, aucun test lancé.</div>
 <pre><code>git checkout main
 git checkout -b feat/par-8-health
 git add demo-book-crud/src/health demo-book-crud/src/app.ts
 git commit -m "feat(health): add health-check endpoint (PAR-8)"
 git-sync</code></pre>
+<div class="note">Attendu : PAR-8 passe en In Progress, 1 commentaire listant ce commit.</div>
 
 <p><strong>Démo 2 — PAR-9, premier commit (suivi continu, partie 1)</strong></p>
+<div class="note"><strong>Ce que ça montre :</strong> un commit qui référence le ticket ne le ferme jamais tout seul — il reste en In Progress, un commentaire s'ajoute.</div>
 <pre><code>git checkout main
 git checkout -b feat/par-9-loans
 git add demo-book-crud/src/loans/store.ts
@@ -397,16 +408,20 @@ git-sync</code></pre>
 <div class="note">Vrai commit (juste le fichier de stockage). Attendu : PAR-9 passe en In Progress, 1er commentaire ajouté.</div>
 
 <p><strong>Démo 2 — PAR-9, deuxième commit (suivi continu, partie 2)</strong></p>
+<div class="note"><strong>Ce que ça montre :</strong> un deuxième commit sur le même ticket ajoute un deuxième commentaire, sans jamais toucher au statut — l'accumulation de l'historique.</div>
 <pre><code>git add demo-book-crud/src/loans/routes.ts
 git commit -m "feat(loans): add CRUD routes (PAR-9)"
 git-sync</code></pre>
 <div class="note">Deuxième vrai commit (les routes, un fichier différent). Attendu : toujours In Progress, un 2e commentaire s'ajoute au premier.</div>
 
 <p><strong>Démo 3 — PAR-9, commit final (passage en Done)</strong></p>
-<pre><code>git add demo-book-crud/src/app.ts demo-book-crud/src/health demo-book-crud/src/reviews demo-book-crud/test.mjs demo-book-crud/package.json demo-book-crud/src/books/store.ts demo-book-crud/README.md
+<div class="note"><strong>Ce que ça montre :</strong> le mot-clé <code>closes-all</code> déclenche l'exécution de vrais tests en local ; s'ils passent tous, le ticket bascule en Done automatiquement, avec le récapitulatif en commentaire.</div>
+<div class="warn">⚠️ Si tu as fait Démo 1 (PAR-8) avant celle-ci : <code>health</code> a disparu du disque au moment du <code>git checkout main</code> (il n'était tracké que sur l'autre branche). Relance <code>./setup-demo-book-crud.sh</code> une deuxième fois, juste ici, avant le <code>git add</code> ci-dessous — sinon "pathspec did not match any files".</div>
+<pre><code>git add demo-book-crud/src/app.ts demo-book-crud/src/health demo-book-crud/test.mjs demo-book-crud/package.json demo-book-crud/README.md
 git commit -m "feat(loans): wire routes and acceptance tests (closes-all) (PAR-9)"
-git-sync --all</code></pre>
+git-sync</code></pre>
 <div class="note">Troisième vrai commit (le branchement + les tests). Attendu : les tests réels tournent en local, puis PAR-9 passe en Done dans Linear (le terminal affichera quand même "In Progress", voir démo 3 plus haut).</div>
+<div class="note"><strong>Règle générale :</strong> si une commande <code>git add</code> dit "did not match any files", relance simplement <code>./setup-demo-book-crud.sh</code> et réessaie — ça régénère tout sans rien casser.</div>
 
 <div class="note">Pour rejouer plusieurs fois : remets PAR-8/PAR-9 en Backlog dans Linear, puis <code>git checkout main &amp;&amp; git branch -D feat/par-8-health feat/par-9-loans</code> avant de recommencer.</div>
 

@@ -99,12 +99,39 @@ git-sync --all
 
 ---
 
+## Test 5 — Le passage en Done, via de vrais tests
+
+Prépare un fichier `.n8ntest` à la racine du dépôt, contenant la commande à exécuter
+(par exemple `echo "cd demo-book-crud && npm test" > .n8ntest`), et assure-toi que
+cette commande affiche bien, sur sa dernière ligne, un JSON `{"allPassed": ..., ...}`.
+
+```bash
+git checkout -b feat/ALO-43-closes-all-test
+git commit --allow-empty -m "test: verification du mecanisme Done (ALO-43) (closes-all)"
+git-sync
+```
+
+**Attendu** : la ligne `mot-cle closes-all detecte, execution des tests` s'affiche, les
+tests tournent **en local** (regarde le résultat dans ton terminal), puis `ALO-43` passe
+directement en **Done** dans Linear — avec un commentaire qui récapitule chaque
+vérification. Le terminal affiche quand même `-> In Progress` : c'est normal, la réponse
+part avant la fin de l'évaluation (voir `docs/04-script-git-sync.md §4.4bis`).
+
+Refais le test avec un `.n8ntest` qui pointe vers une commande qui échoue exprès (par
+exemple `exit 1`) : le ticket doit rester en **In Progress**, jamais basculer en Done à
+tort.
+
+---
+
 ## Tableau de diagnostic
 
 | Symptôme | Cause probable |
 |---|---|
 | `Appel a n8n impossible` | conteneur arrêté, ou tu utilises l'URL de test sans avoir cliqué sur *Listen* |
-| n8n répond `404` | le workflow n'est pas activé, ou le chemin du webhook diffère |
+| n8n répond `404` | le workflow n'est pas activé/Published, ou le chemin du webhook diffère |
+| Le ticket ne passe jamais en Done, `closes-all` est bien écrit | faute de frappe (`close-all` au lieu de `closes-all`), vérifie le message exact du commit |
+| `Resultats de tests illisibles` | la commande dans `.n8ntest` n'affiche pas de JSON valide sur sa dernière ligne de stdout |
+| `pathspec ... did not match any files` lors d'un `git add` | les fichiers de démo ont disparu du disque (changement de branche) — relance `./setup-demo-book-crud.sh` |
 | `Reponse IA illisible` | la clé Anthropic est absente ou l'en-tête `anthropic-version` manque au nœud 7 |
 | `Aucun ticket resolu` | la requête Linear n'a rien trouvé : mauvaise clé d'équipe, ou ticket inexistant |
 | Erreur GraphQL `Argument Validation Error` | une variable est `null` — regarde la sortie du nœud précédent |
@@ -117,7 +144,7 @@ l'exécution en rouge, puis sur le nœud fautif.
 
 ## Avant de fermer
 
-- [ ] Les quatre tests passent
+- [ ] Les cinq tests passent
 - [ ] Le workflow est **activé** (interrupteur en haut à droite)
 - [ ] `unset N8N_WEBHOOK_URL` — tu repasses sur l'URL de production
 - [ ] Un dernier `git-sync` sur un vrai cas fonctionne sans mode test

@@ -467,6 +467,42 @@ C'est cette ligne que ton terminal affichera.
 
 ---
 
+## Nœuds 16 à 21 — le mécanisme Done
+
+Ces six nœuds forment une branche **indépendante** du reste : ils partent de
+`Linear · Ajouter le commentaire` (en parallèle de `Réponse`, pas à la suite), donc la
+réponse HTTP à `git-sync` part sans attendre la fin de cette évaluation. Le plus simple
+pour les recréer à l'identique : **importer `workflows/git-linear-sync.json`** plutôt que
+retaper chaque expression à la main — le détail ci-dessous sert à comprendre, pas à
+copier caractère par caractère.
+
+**`Mot-clé Done présent ?`** (IF) — branché sur la sortie de `Linear · Ajouter le
+commentaire`. Condition : `{{ $('Analyser le contexte').first().json.commitsText.toLowerCase() }}`
+contient `closes-all`.
+
+**`Décider Done (tests réels)`** (Code) — lit `ctx.testResults` (transporté depuis le
+payload de `git-sync` par `Analyser le contexte`, voir `docs/04-script-git-sync.md`).
+Calcule `done` (booléen : tous les tests reçus ont `passed: true`) et `recap` (liste
+formatée en `- [x]` / `- [ ]`). Aucun appel réseau dans ce nœud.
+
+**`Tous les tests passent ?`** (IF) — condition : `{{ $json.done }}` est vrai.
+
+**`Linear · État Done`** (HTTP Request) — même requête que `Linear · État In Progress`,
+avec `type: { eq: "completed" }` à la place de `"started"`.
+
+**`Linear · Passer en Done`** (HTTP Request) — même mutation que
+`Linear · Passer en In Progress`, avec le `stateId` de l'étape précédente.
+
+**`Linear · Commentaire Done`** (HTTP Request) — mutation `commentCreate`, avec un corps
+qui reprend `recap` et la confiance : *"Mot-clé closes-all détecté : tous les critères
+semblent remplis..."*.
+
+Si le mot-clé est absent, ou si `Tous les tests passent ?` répond non (aucun résultat de
+test reçu, ou au moins un échec), l'exécution s'arrête simplement sur cette branche — le
+ticket reste tel que `Linear · Passer en In Progress` l'a laissé.
+
+---
+
 ## Activer
 
 Bascule l'interrupteur **Active** en haut à droite. La Production URL du webhook devient
